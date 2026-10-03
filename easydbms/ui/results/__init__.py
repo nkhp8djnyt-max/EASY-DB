@@ -3,5 +3,13 @@
 from .grid import ResultGrid
 from .model import ResultTableModel, format_cell
 from .panel import ResultsPanel
+from .table_tab import PageLoader, TableTab
 
-__all__ = ["ResultGrid", "ResultTableModel", "ResultsPanel", "format_cell"]
+__all__ = [
+    "PageLoader",
+    "ResultGrid",
+    "ResultTableModel",
+    "ResultsPanel",
+    "TableTab",
+    "format_cell",
+]

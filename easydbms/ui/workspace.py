@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.connections import FileConnection, ServerConnection
+from ..core.db import NotConnectedError, QueryResult
 from ..core.dialects import (
     MYSQL,
     POSTGRESQL,
@@ -43,11 +44,12 @@ from ..core.queries import (
     is_write,
 )
 from ..core.queries.danger import DangerKind
+from ..core.schema import Table
 from ..core.session import Session
 from .connection_form import DIALECT_LABELS
 from .editor import SqlEditor
 from .i18n import tr
-from .results import ResultsPanel
+from .results import ResultsPanel, TableTab
 
 _SAVE_DELAY_MS = 600
 _DIALECTS: tuple[Dialect, ...] = (POSTGRESQL, MYSQL, SQLITE)
@@ -213,6 +215,7 @@ class QueryWorkspace(QWidget):
         if widget.run is not None:
             widget.run.cancel()
         widget.alive = False
+        widget.results.shutdown()
         self.tabs.removeTab(index)
         widget.deleteLater()
         if self.tabs.count() == 0:
@@ -254,6 +257,50 @@ class QueryWorkspace(QWidget):
             tab.editor.set_dialect(get_dialect(self.dialect_combo.currentData()))
             self._schedule_save()
 
+    # ------------------------------------------------------------------ tables (from the diagram)
+
+    def open_table(self, table: Table) -> TableTab | None:
+        """Show ``table``'s rows in a tab of the current query tab's results area."""
+        tab = self.current_tab()
+        if tab is None:
+            return None
+        session = self._session
+        schema = session.schema if session is not None else None
+        reference = schema.reference(table, self.dialect) if schema else table.name
+
+        def create() -> TableTab:
+            return TableTab(table, reference, self.dialect, self._load_page, self._row_limit)
+
+        return tab.results.show_table(table.key, table.name, create)
+
+    def _load_page(self, sql: str, max_rows: int) -> Future[QueryResult]:
+        session = self._session
+        if session is None or session.client is None:
+            raise NotConnectedError("the connection is not ready")
+        return session.run_on_meta(lambda client: client.execute(sql, max_rows=max_rows))
+
+    def insert_text(self, text: str) -> None:
+        """Put ``text`` at the cursor of the current editor (a name clicked in the diagram)."""
+        tab = self.current_tab()
+        if tab is not None:
+            tab.editor.insertPlainText(text)
+            tab.editor.setFocus()
+
+    def select_all_from(self, table: Table) -> None:
+        tab = self.current_tab()
+        if tab is None:
+            return
+        session = self._session
+        schema = session.schema if session is not None else None
+        reference = schema.reference(table, self.dialect) if schema else table.name
+        editor = tab.editor
+        prefix = "\n" if editor.text().strip() else ""
+        cursor = editor.textCursor()
+        cursor.movePosition(cursor.MoveOperation.End)
+        cursor.insertText(f"{prefix}SELECT * FROM {reference} LIMIT 100;")
+        editor.setTextCursor(cursor)
+        editor.setFocus()
+
     # ------------------------------------------------------------------ persistence
 
     def _restore_tabs(self) -> None:
@@ -282,6 +329,7 @@ class QueryWorkspace(QWidget):
 
     def shutdown(self) -> None:
         for tab in self.all_tabs():
+            tab.results.shutdown()
             if tab.run is not None:
                 tab.run.cancel()
         self._clock.stop()

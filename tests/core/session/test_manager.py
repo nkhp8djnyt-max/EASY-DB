@@ -307,3 +307,34 @@ def test_a_connection_error_object_is_delivered_to_listeners(tmp_path: Path) -> 
         assert str(error) == "server said no"
     finally:
         manager.close_all()
+
+
+def test_manager_loads_the_schema_after_connecting_when_asked(tmp_path: Path) -> None:
+    import sqlite3
+
+    from easydbms.core.session import SchemaChanged, SchemaState
+
+    events = Events()
+    store = ConnectionStore(tmp_path / "connections.json")
+    path = sqlite_file(tmp_path, "s.db")
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE t (id INTEGER PRIMARY KEY)")
+    con.close()
+    config = file_config(path, "s")
+    store.save(config)
+    manager = ConnectionManager(
+        store, MemorySecretStore(), listener=events, environ={}, load_schema=True
+    )
+    try:
+        session = manager.activate(config.id).result(timeout=10)
+        deadline = threading.Event()
+        for _ in range(200):
+            if session.schema_state is SchemaState.READY:
+                break
+            deadline.wait(0.05)
+        assert session.schema is not None
+        assert [t.name for t in session.schema.tables] == ["t"]
+        states = [e.state for e in events.items if isinstance(e, SchemaChanged)]
+        assert states == [SchemaState.LOADING, SchemaState.READY]
+    finally:
+        manager.close_all()

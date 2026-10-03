@@ -6,6 +6,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
 from .connections import ConnectionStore, SecretStore, choose_secret_store
+from .erd import ErdLayoutStore
 from .paths import AppPaths
 from .queries import QueryTabStore
 from .session import ConnectionManager, ManagerEvent
@@ -22,6 +23,7 @@ class Services:
     secrets: SecretStore
     manager: ConnectionManager
     tab_store: QueryTabStore
+    erd_store: ErdLayoutStore
 
     def close(self) -> None:
         self.manager.close_all()
@@ -48,6 +50,9 @@ def build_services(
         db=db,
         store=store,
         secrets=chosen_secrets,
-        manager=ConnectionManager(store, chosen_secrets, listener=listener, environ=environ),
+        manager=ConnectionManager(
+            store, chosen_secrets, listener=listener, environ=environ, load_schema=True
+        ),
         tab_store=QueryTabStore(db),
+        erd_store=ErdLayoutStore(db),
     )

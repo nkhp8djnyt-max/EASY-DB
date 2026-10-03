@@ -352,3 +352,138 @@ def test_formatting_nothing_does_nothing(env: Env, qtbot: QtBot, text: str) -> N
     tab.editor.setPlainText(text)
     workspace.format_current()
     assert tab.editor.text() == text
+
+
+# ---------------------------------------------------------------------------- tables
+
+
+def shop_workspace(env: Env, qtbot: QtBot, rows: int = 25) -> QueryWorkspace:
+    from .conftest import add_shop
+
+    config = add_shop(env, "Shop", rows)
+    session = env.services.manager.activate(config.id).result(timeout=5)
+    qtbot.waitUntil(lambda: session.schema is not None, timeout=10000)
+    workspace = QueryWorkspace(config, env.services.tab_store, lambda: 10)
+    qtbot.addWidget(workspace)
+    workspace.set_session(session)
+    workspace.resize(800, 600)
+    workspace.show()
+    return workspace
+
+
+def table_of(workspace: QueryWorkspace, name: str):  # type: ignore[no-untyped-def]
+    assert workspace._session is not None
+    assert workspace._session.schema is not None
+    table = workspace._session.schema.find(name)
+    assert table is not None
+    return table
+
+
+def test_opening_a_table_adds_a_data_tab_that_loads_its_first_page(env: Env, qtbot: QtBot) -> None:
+    workspace = shop_workspace(env, qtbot)
+    tab = workspace.open_table(table_of(workspace, "book"))
+    assert tab is not None
+    qtbot.waitUntil(lambda: not tab._loading, timeout=5000)
+    results = workspace.current_tab().results  # type: ignore[union-attr]
+    assert results.table_count() == 1
+    assert results.tabs.tabText(0) == "▦ book"
+    assert results.tabs.currentWidget() is tab
+    model = tab.grid.model()
+    assert model.rowCount() == 10
+    assert "rows 1-10" in tab.summary.text()
+
+
+def test_opening_the_same_table_again_reuses_its_tab(env: Env, qtbot: QtBot) -> None:
+    workspace = shop_workspace(env, qtbot)
+    first = workspace.open_table(table_of(workspace, "book"))
+    other = workspace.open_table(table_of(workspace, "author"))
+    again = workspace.open_table(table_of(workspace, "book"))
+    assert again is first
+    assert other is not first
+    results = workspace.current_tab().results  # type: ignore[union-attr]
+    assert results.table_count() == 2
+    assert results.tabs.currentWidget() is first
+
+
+def test_running_a_query_keeps_the_table_tabs(env: Env, qtbot: QtBot) -> None:
+    workspace = shop_workspace(env, qtbot)
+    workspace.open_table(table_of(workspace, "book"))
+    type_and_run(workspace, "select 1 as a")
+    wait_idle(workspace, qtbot)
+    results = workspace.current_tab().results  # type: ignore[union-attr]
+    assert results.table_count() == 1
+    assert results.count() == 1  # the new statement result
+    texts = [results.tabs.tabText(i) for i in range(results.tabs.count())]
+    assert "▦ book" in texts
+    assert "Result 1" in texts
+    type_and_run(workspace, "select 2 as b")  # the old statement result is replaced, not stacked
+    wait_idle(workspace, qtbot)
+    assert results.count() == 1
+    assert results.table_count() == 1
+
+
+def test_table_tabs_can_be_closed_but_statement_results_have_no_close_button(
+    env: Env, qtbot: QtBot
+) -> None:
+    from PySide6.QtWidgets import QTabBar
+
+    workspace = shop_workspace(env, qtbot)
+    workspace.open_table(table_of(workspace, "book"))
+    type_and_run(workspace, "select 1")
+    wait_idle(workspace, qtbot)
+    results = workspace.current_tab().results  # type: ignore[union-attr]
+    bar = results.tabs.tabBar()
+    for index in range(results.tabs.count()):
+        button = bar.tabButton(index, QTabBar.ButtonPosition.RightSide)
+        is_table = results.tabs.tabText(index).startswith("▦")
+        assert (button is not None) == is_table
+    book_index = next(i for i in range(results.tabs.count()) if results.tabs.tabText(i) == "▦ book")
+    results.tabs.tabCloseRequested.emit(book_index)
+    assert results.table_count() == 0
+    assert results.count() == 1
+
+
+def test_table_tabs_belong_to_their_query_tab(env: Env, qtbot: QtBot) -> None:
+    workspace = shop_workspace(env, qtbot)
+    first = workspace.current_tab()
+    workspace.open_table(table_of(workspace, "book"))
+    second = workspace.new_tab()
+    assert second.results.table_count() == 0
+    assert first is not None
+    assert first.results.table_count() == 1
+
+
+def test_inserting_a_name_and_select_star_go_to_the_editor(env: Env, qtbot: QtBot) -> None:
+    workspace = shop_workspace(env, qtbot)
+    tab = workspace.current_tab()
+    assert tab is not None
+    tab.editor.setPlainText("select ")
+    cursor = tab.editor.textCursor()
+    cursor.movePosition(cursor.MoveOperation.End)
+    tab.editor.setTextCursor(cursor)
+    workspace.insert_text("title")
+    assert tab.editor.text() == "select title"
+
+    tab.editor.setPlainText("")
+    workspace.select_all_from(table_of(workspace, "book"))
+    assert tab.editor.text() == "SELECT * FROM book LIMIT 100;"
+    workspace.select_all_from(table_of(workspace, "author"))
+    assert tab.editor.text() == "SELECT * FROM book LIMIT 100;\nSELECT * FROM author LIMIT 100;"
+
+
+def test_a_table_tab_without_a_session_reports_the_problem(env: Env, qtbot: QtBot) -> None:
+    workspace = shop_workspace(env, qtbot)
+    table = table_of(workspace, "book")
+    workspace.set_session(None)
+    tab = workspace.open_table(table)
+    assert tab is not None
+    assert "not ready" in tab._message.text()
+
+
+def test_closing_a_query_tab_stops_its_table_tabs(env: Env, qtbot: QtBot) -> None:
+    workspace = shop_workspace(env, qtbot)
+    workspace.new_tab()
+    table_tab = workspace.open_table(table_of(workspace, "book"))
+    assert table_tab is not None
+    workspace.close_current_tab()
+    assert not table_tab.alive

@@ -11,7 +11,7 @@ import pytest
 from easydbms.core.connections import FileConnection, ServerConnection
 from easydbms.core.db import ConnectionFailed, DatabaseClient, DbError, QueryError
 from easydbms.core.db.base import RawResult
-from easydbms.core.session import ManagerEvent, Session, SessionState
+from easydbms.core.session import ManagerEvent, Session, SessionState, SessionStateChanged
 
 
 class ScriptedClient(DatabaseClient):
@@ -72,7 +72,7 @@ class Events:
 
     def states(self) -> list[str]:
         with self._lock:
-            return [str(e.state.value) for e in self.items if hasattr(e, "state")]
+            return [str(e.state.value) for e in self.items if isinstance(e, SessionStateChanged)]
 
 
 def sqlite_file(tmp_path: Path, name: str = "db.sqlite") -> Path:

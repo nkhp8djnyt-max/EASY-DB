@@ -17,8 +17,7 @@ from easydbms.core.db import (
     QueryError,
     ReadOnlyViolation,
 )
-
-from .conftest import Target
+from tests.core.conftest import Target
 
 pytestmark = pytest.mark.integration
 

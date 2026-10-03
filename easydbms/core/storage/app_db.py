@@ -44,6 +44,20 @@ MIGRATIONS: tuple[Migration, ...] = (
             "CREATE INDEX query_tabs_connection ON query_tabs (connection_id, position)",
         ),
     ),
+    Migration(
+        3,
+        "positions of table cards the user moved in the ERD, per connection and schema scope",
+        (
+            "CREATE TABLE erd_positions ("
+            " connection_id TEXT NOT NULL,"
+            " scope TEXT NOT NULL,"
+            " schema TEXT NOT NULL,"
+            " name TEXT NOT NULL,"
+            " x REAL NOT NULL,"
+            " y REAL NOT NULL,"
+            " PRIMARY KEY (connection_id, scope, schema, name))",
+        ),
+    ),
 )
 
 

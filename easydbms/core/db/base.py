@@ -27,6 +27,9 @@ from .errors import (
 )
 from .types import CheckStep, ConnectionCheck, QueryResult
 
+#: Seconds ``disconnect`` waits for a running statement to stop after cancelling it.
+_DISCONNECT_WAIT = 5.0
+
 #: What ``_run`` hands back: columns, rows, affected rows, truncated.
 RawResult = tuple[tuple[str, ...], list[tuple[Any, ...]], int | None, bool]
 
@@ -78,11 +81,26 @@ class DatabaseClient(ABC):
             self._raw = raw
 
     def disconnect(self) -> None:
+        """Close the connection; a statement that is running is cancelled and waited for first.
+
+        Closing a driver connection under a running statement can crash the process (SQLite in
+        particular), so the close happens only once ``execute`` has let go of it. If the statement
+        refuses to stop for ``_DISCONNECT_WAIT`` seconds the connection is left to be released
+        when that call returns.
+        """
         with self._state_lock:
             raw, self._raw = self._raw, None
             self._server_info = None
-        if raw is not None:
-            self._close_quietly(raw)
+        if raw is None:
+            return
+        if self._busy.is_set():
+            with contextlib.suppress(Exception):
+                self._cancel(raw)
+        if self._exec_lock.acquire(timeout=_DISCONNECT_WAIT):
+            try:
+                self._close_quietly(raw)
+            finally:
+                self._exec_lock.release()
 
     def execute(self, sql: str, *, max_rows: int | None = None) -> QueryResult:
         """Run one statement and return at most ``max_rows`` rows.

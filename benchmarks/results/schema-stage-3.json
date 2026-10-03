@@ -1,0 +1,136 @@
+{
+ "introspection": [
+  {
+   "engine": "PostgreSQL",
+   "tables": 100,
+   "columns": 900,
+   "foreign_keys": 132,
+   "easydbms_ms": 26.1668439998175,
+   "sqlalchemy_reflect_ms": 133.70647200008534,
+   "sqlalchemy_inspector_ms": 954.8378110002886,
+   "same_counts": true
+  },
+  {
+   "engine": "PostgreSQL",
+   "tables": 300,
+   "columns": 2700,
+   "foreign_keys": 398,
+   "easydbms_ms": 76.00451100006467,
+   "sqlalchemy_reflect_ms": 314.1694849991836,
+   "sqlalchemy_inspector_ms": 2975.169052999263,
+   "same_counts": true
+  },
+  {
+   "engine": "PostgreSQL",
+   "tables": 1000,
+   "columns": 9000,
+   "foreign_keys": 1332,
+   "easydbms_ms": 251.21639099961612,
+   "sqlalchemy_reflect_ms": 1238.23949349935,
+   "sqlalchemy_inspector_ms": 8851.178092000737,
+   "same_counts": true
+  },
+  {
+   "engine": "MariaDB",
+   "tables": 100,
+   "columns": 900,
+   "foreign_keys": 132,
+   "easydbms_ms": 23.162155999671086,
+   "sqlalchemy_reflect_ms": 218.15525049987627,
+   "sqlalchemy_inspector_ms": 102.15338450052514,
+   "same_counts": true
+  },
+  {
+   "engine": "MariaDB",
+   "tables": 300,
+   "columns": 2700,
+   "foreign_keys": 398,
+   "easydbms_ms": 61.34657300026447,
+   "sqlalchemy_reflect_ms": 387.81014700089145,
+   "sqlalchemy_inspector_ms": 281.3097239995841,
+   "same_counts": true
+  },
+  {
+   "engine": "MariaDB",
+   "tables": 1000,
+   "columns": 9000,
+   "foreign_keys": 1332,
+   "easydbms_ms": 248.8167820010858,
+   "sqlalchemy_reflect_ms": 1315.3582459999598,
+   "sqlalchemy_inspector_ms": 1229.3266654996842,
+   "same_counts": true
+  },
+  {
+   "engine": "SQLite",
+   "tables": 100,
+   "columns": 900,
+   "foreign_keys": 132,
+   "easydbms_ms": 6.411227001080988,
+   "sqlalchemy_reflect_ms": 111.19032550050179,
+   "sqlalchemy_inspector_ms": 53.14690950035583,
+   "same_counts": true
+  },
+  {
+   "engine": "SQLite",
+   "tables": 300,
+   "columns": 2700,
+   "foreign_keys": 398,
+   "easydbms_ms": 19.650725000246894,
+   "sqlalchemy_reflect_ms": 378.5316524990776,
+   "sqlalchemy_inspector_ms": 222.41222400043625,
+   "same_counts": true
+  },
+  {
+   "engine": "SQLite",
+   "tables": 1000,
+   "columns": 9000,
+   "foreign_keys": 1332,
+   "easydbms_ms": 79.39248199909343,
+   "sqlalchemy_reflect_ms": 1797.554179999679,
+   "sqlalchemy_inspector_ms": 722.8483905000758,
+   "same_counts": true
+  }
+ ],
+ "layout": [
+  {
+   "tables": 50,
+   "edges": 65,
+   "layout_ms": 1.1172689992235973
+  },
+  {
+   "tables": 200,
+   "edges": 265,
+   "layout_ms": 4.87090100068599
+  },
+  {
+   "tables": 1000,
+   "edges": 1332,
+   "layout_ms": 32.55790299954242
+  },
+  {
+   "tables": 3000,
+   "edges": 3998,
+   "layout_ms": 174.04989799979376
+  }
+ ],
+ "scene": [
+  {
+   "tables": 200,
+   "relations": 265,
+   "build_ms": 58.39975299932121,
+   "fit_zoom": 0.04905244522634565,
+   "paint_overview_ms": 5.012900001020171,
+   "paint_detail_ms": 14.1028810012358,
+   "filter_ms": 0.257796000369126
+  },
+  {
+   "tables": 1000,
+   "relations": 1332,
+   "build_ms": 393.93061500049953,
+   "fit_zoom": 0.013962461325944607,
+   "paint_overview_ms": 29.30599799947231,
+   "paint_detail_ms": 28.380061999996542,
+   "filter_ms": 3.585328000554
+  }
+ ]
+}

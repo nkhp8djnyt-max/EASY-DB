@@ -468,3 +468,205 @@ def test_tabs_survive_a_restart(env: Env, qtbot: QtBot) -> None:
         assert first_tab.editor.text() == "select 'remember me'"  # type: ignore[attr-defined]
     finally:
         second.close()
+
+
+# ---------------------------------------------------------------------------- the diagram
+
+
+def shop_window(env: Env, qtbot: QtBot, name: str = "Shop") -> tuple[MainWindow, str]:
+    from .conftest import add_shop
+
+    config = add_shop(env, name, rows=12)
+    window = make_window(env, qtbot)
+    window.activate(config.id)
+    qtbot.waitUntil(
+        lambda: (p := window._erd_panes.get(config.id)) is not None and len(p.scene.cards()) > 0,
+        timeout=10000,
+    )
+    return window, config.id
+
+
+def test_the_diagram_hint_shows_until_a_connection_is_ready(env: Env, qtbot: QtBot) -> None:
+    window = make_window(env, qtbot)
+    assert window.erd_stack.currentWidget() is window._erd_hint
+    assert window.current_pane() is None
+
+
+def test_connecting_shows_the_diagram_of_the_database(env: Env, qtbot: QtBot) -> None:
+    window, cid = shop_window(env, qtbot)
+    pane = window.current_pane()
+    assert pane is window._erd_panes[cid]
+    assert len(pane.scene.cards()) == 6
+    assert "6 tables" in pane.summary.text()
+    assert window.erd_stack.currentWidget() is pane
+    assert window.switcher.text().startswith("Shop")  # the switcher stays above the diagram
+
+
+def test_each_connection_has_its_own_diagram(env: Env, qtbot: QtBot) -> None:
+    window, first = shop_window(env, qtbot, "One")
+    second_cfg = env.add_sqlite("Two")  # an empty database
+    window.activate(second_cfg.id)
+    qtbot.waitUntil(lambda: second_cfg.id in window._erd_panes, timeout=10000)
+    assert window.current_pane() is window._erd_panes[second_cfg.id]
+    assert window._erd_panes[first] is not window._erd_panes[second_cfg.id]
+    window.activate(first)
+    qtbot.waitUntil(lambda: window.current_pane() is window._erd_panes[first], timeout=10000)
+    assert len(window._erd_panes[first].scene.cards()) == 6
+
+
+def test_a_failed_connection_goes_back_to_the_hint(env: Env, qtbot: QtBot) -> None:
+    config = env.add_sqlite("Broken")
+    window = make_window(env, qtbot)
+    config_path = config.path
+    from pathlib import Path
+
+    Path(config_path).unlink()
+    window.activate(config.id)
+    wait_for_state(env, qtbot, config.id, SessionState.ERROR)
+    qtbot.waitUntil(lambda: window.erd_stack.currentWidget() is window._erd_hint, timeout=5000)
+
+
+def test_opening_a_table_from_the_diagram_shows_its_rows(env: Env, qtbot: QtBot) -> None:
+    window, cid = shop_window(env, qtbot)
+    pane = window._erd_panes[cid]
+    book = pane.scene.card(next(k for k in (c.key for c in pane.scene.cards()) if k.name == "book"))
+    assert book is not None
+    pane.scene.card_opened(book)
+    workspace = window._workspaces[cid]
+    tab = workspace.current_tab()
+    assert tab is not None
+    qtbot.waitUntil(lambda: tab.results.table_count() == 1, timeout=5000)
+    table_tab = tab.results.table_tab(book.key)
+    assert table_tab is not None
+    qtbot.waitUntil(lambda: not table_tab._loading, timeout=5000)
+    assert table_tab.grid.model().rowCount() == 12  # all books
+
+
+def test_a_column_clicked_in_the_diagram_is_typed_into_the_editor(env: Env, qtbot: QtBot) -> None:
+    window, cid = shop_window(env, qtbot)
+    pane = window._erd_panes[cid]
+    book = next(c for c in pane.scene.cards() if c.table.name == "book")
+    pane.scene.card_clicked(book, book.table.column("title"))
+    tab = window._workspaces[cid].current_tab()
+    assert tab is not None
+    assert tab.editor.text().endswith("title")
+    pane.selectStarRequested.emit(book.table)
+    assert "SELECT * FROM book LIMIT 100;" in tab.editor.text()
+
+
+def test_the_database_menu(env: Env, qtbot: QtBot) -> None:
+    window, cid = shop_window(env, qtbot)
+    assert menu_action(window, "&Database", "&Go to table…").shortcut().toString() == "Ctrl+P"
+    assert (
+        menu_action(window, "&Database", "&Refresh structure").shortcut().toString()
+        == "Ctrl+Shift+R"
+    )
+    session = env.services.manager.session(cid)
+    version = session.schema_version
+    menu_action(window, "&Database", "&Refresh structure").trigger()
+    qtbot.waitUntil(lambda: session.schema_version > version, timeout=10000)
+
+    pane = window._erd_panes[cid]
+    tag = next(c for c in pane.scene.cards() if c.table.name == "tag")
+    tag.setPos(500, 500)
+    pane.scene.card_moved(tag)
+    menu_action(window, "&Database", "&Reset diagram layout").trigger()
+    assert env.services.erd_store.load(cid, "*") == {}
+    view = pane.view
+    view.set_zoom(0.3)
+    menu_action(window, "&Database", "&Fit diagram").trigger()
+    assert view.zoom != 0.3
+
+
+def test_database_menu_actions_do_nothing_without_a_connection(env: Env, qtbot: QtBot) -> None:
+    window = make_window(env, qtbot)
+    for text in ("&Refresh structure", "&Fit diagram", "&Reset diagram layout"):
+        menu_action(window, "&Database", text).trigger()
+    menu_action(window, "&Database", "&Go to table…").trigger()
+    assert "not loaded yet" in window._status_label.text()
+
+
+def test_go_to_table_selects_it_in_the_diagram_and_opens_its_rows(
+    env: Env, qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from easydbms.ui.quick_open import QuickOpenDialog
+
+    window, cid = shop_window(env, qtbot)
+    session = env.services.manager.session(cid)
+    assert session.schema is not None
+    wanted = session.schema.find("author")
+
+    def fake_exec(self: QuickOpenDialog) -> bool:
+        self.chosen = (wanted, None)  # type: ignore[assignment]
+        return True
+
+    monkeypatch.setattr(QuickOpenDialog, "exec", fake_exec)
+    menu_action(window, "&Database", "&Go to table…").trigger()
+    pane = window._erd_panes[cid]
+    assert pane.scene.focus_key == wanted.key  # type: ignore[union-attr]
+    tab = window._workspaces[cid].current_tab()
+    assert tab is not None
+    assert tab.results.table_tab(wanted.key) is not None  # type: ignore[union-attr]
+
+
+def test_go_to_table_cancelled_does_nothing(
+    env: Env, qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from easydbms.ui.quick_open import QuickOpenDialog
+
+    window, cid = shop_window(env, qtbot)
+    monkeypatch.setattr(QuickOpenDialog, "exec", lambda self: False)
+    menu_action(window, "&Database", "&Go to table…").trigger()
+    tab = window._workspaces[cid].current_tab()
+    assert tab is not None
+    assert tab.results.table_count() == 0
+
+
+def test_the_diagram_can_be_collapsed_and_the_choice_is_remembered(env: Env, qtbot: QtBot) -> None:
+    window, _ = shop_window(env, qtbot)
+    action = menu_action(window, "&Database", "Show the &diagram")
+    assert action.isChecked()
+    window.collapse_button.click()
+    assert not window.erd_stack.isVisible()
+    assert not action.isChecked()
+    assert window._erd_pane_widget.maximumWidth() == 300
+    assert env.services.db.get_state("window/erd_collapsed") is True
+    window.set_erd_collapsed(False)
+    assert window.erd_stack.isVisible()
+    assert action.isChecked()
+    assert window._erd_pane_widget.maximumWidth() > 1000
+    window.set_erd_collapsed(True)
+    window.close()
+    reopened = build_services(
+        AppPaths.under(env.tmp_path), listener=env.bridge.post, secrets=env.secrets
+    )
+    again = MainWindow(reopened, EventBridge(), BackgroundRunner())
+    qtbot.addWidget(again)
+    try:
+        assert again._erd_collapsed
+        assert not again.erd_stack.isVisible()
+    finally:
+        again.close()
+        reopened.close()
+
+
+def test_deleting_a_connection_drops_its_diagram_and_saved_positions(
+    env: Env, qtbot: QtBot
+) -> None:
+    window, cid = shop_window(env, qtbot)
+    env.services.erd_store.save(
+        cid, "*", {next(iter(c.key for c in window._erd_panes[cid].scene.cards())): (1.0, 2.0)}
+    )
+    env.services.store.remove(cid)
+    window._refresh()
+    assert cid not in window._erd_panes
+    assert env.services.erd_store.load(cid, "*") == {}
+
+
+def test_changing_the_theme_recolours_the_diagram(env: Env, qtbot: QtBot) -> None:
+    window, cid = shop_window(env, qtbot)
+    pane = window._erd_panes[cid]
+    before = pane.scene.cards()[0]._colors.card.name()
+    window.set_theme("light")
+    assert pane.scene.cards()[0]._colors.card.name() != before
+    window.set_theme("dark")

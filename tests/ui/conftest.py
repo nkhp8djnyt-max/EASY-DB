@@ -123,3 +123,33 @@ def shown_texts(panel: SessionPanel) -> str:
     return " | ".join(
         label.text() for label in page.findChildren(QLabel) if label.isVisibleTo(page)
     )
+
+
+SHOP_SCRIPT = """
+CREATE TABLE author (id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE);
+CREATE TABLE book (id INTEGER PRIMARY KEY, author_id INTEGER NOT NULL REFERENCES author(id),
+                   title TEXT, published INTEGER);
+CREATE TABLE tag (id INTEGER PRIMARY KEY, label TEXT);
+CREATE TABLE book_tag (book_id INTEGER NOT NULL REFERENCES book(id),
+                       tag_id INTEGER NOT NULL REFERENCES tag(id), PRIMARY KEY (book_id, tag_id));
+CREATE TABLE lonely (id INTEGER PRIMARY KEY, note TEXT);
+CREATE VIEW author_names AS SELECT id, name FROM author;
+"""
+
+
+def add_shop(env: Env, name: str = "Shop", rows: int = 0) -> FileConnection:
+    """A SQLite connection whose file holds a small bookshop schema (and ``rows`` books)."""
+    config = env.add_sqlite(name)
+    con = sqlite3.connect(config.path)
+    con.executescript(SHOP_SCRIPT)
+    con.execute(
+        "INSERT INTO author (id, name, email) VALUES (1, 'Ann', 'ann@x'), (2, 'Bob', 'b@x')"
+    )
+    for i in range(1, rows + 1):
+        con.execute(
+            "INSERT INTO book (id, author_id, title, published) VALUES (?, ?, ?, ?)",
+            (i, 1 + i % 2, f"Book {i:03d}", 1990 + i % 30),
+        )
+    con.commit()
+    con.close()
+    return config

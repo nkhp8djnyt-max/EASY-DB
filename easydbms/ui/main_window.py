@@ -19,16 +19,26 @@ from PySide6.QtWidgets import (
     QSplitter,
     QStackedWidget,
     QToolBar,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 from ..core.connections import ServerConnection
+from ..core.schema import Table
 from ..core.services import Services
-from ..core.session import ActiveChanged, Session, SessionState, SessionStateChanged
+from ..core.session import (
+    ActiveChanged,
+    SchemaChanged,
+    Session,
+    SessionState,
+    SessionStateChanged,
+)
 from .connection_dialog import ConnectionDialog
 from .db_switcher import DbSwitcher
+from .erd import ErdPane
 from .i18n import tr
+from .quick_open import QuickOpenDialog
 from .runtime import BackgroundRunner, EventBridge
 from .secrets_ui import ensure_unlocked
 from .session_panel import SessionPanel
@@ -38,6 +48,8 @@ from .workspace import QueryWorkspace
 APP_TITLE = "EasyDBMS"
 _GEOMETRY_KEY = "window/geometry"
 _SPLITTER_KEY = "window/splitter"
+_ERD_COLLAPSED_KEY = "window/erd_collapsed"
+_COLLAPSED_WIDTH = 300
 
 
 class MainWindow(QMainWindow):
@@ -46,6 +58,7 @@ class MainWindow(QMainWindow):
         self._services = services
         self._runner = runner
         self._closed = False
+        self._erd_collapsed = False
         self.setWindowTitle(APP_TITLE)
         self.resize(1240, 780)
         self._build_menu()
@@ -92,6 +105,26 @@ class MainWindow(QMainWindow):
             action.triggered.connect(lambda _checked=False, c=count: self.set_row_limit(c))
             limits.addAction(action)
             limit_menu.addAction(action)
+
+        database_menu = self.menuBar().addMenu(tr("&Database"))
+        for label, keys, callback in (
+            (tr("&Go to table…"), "Ctrl+P", self.go_to_table),
+            (tr("&Refresh structure"), "Ctrl+Shift+R", self.refresh_schema),
+            (tr("&Fit diagram"), "", self.fit_diagram),
+            (tr("&Reset diagram layout"), "", self.reset_diagram),
+        ):
+            db_action = QAction(label, self)
+            if keys:
+                db_action.setShortcut(QKeySequence(keys))
+            db_action.triggered.connect(lambda _checked=False, cb=callback: cb())
+            database_menu.addAction(db_action)
+        database_menu.addSeparator()
+        self.toggle_diagram_action = QAction(tr("Show the &diagram"), self, checkable=True)
+        self.toggle_diagram_action.setChecked(True)
+        self.toggle_diagram_action.triggered.connect(
+            lambda checked: self.set_erd_collapsed(not checked)
+        )
+        database_menu.addAction(self.toggle_diagram_action)
 
         view_menu = self.menuBar().addMenu(tr("&View"))
         themes = QActionGroup(self)
@@ -171,11 +204,24 @@ class MainWindow(QMainWindow):
         self.switcher.manageRequested.connect(lambda: self.open_connections())
         header.addWidget(self.switcher)
         header.addStretch(1)
+        self.collapse_button = QToolButton()
+        self.collapse_button.setText("⏵")
+        self.collapse_button.setToolTip(tr("Hide the diagram"))
+        self.collapse_button.setProperty("flat", True)
+        self.collapse_button.clicked.connect(
+            lambda: self.set_erd_collapsed(not self._erd_collapsed)
+        )
+        header.addWidget(self.collapse_button)
         layout.addLayout(header)
+        self.erd_stack = QStackedWidget()
+        self._erd_panes: dict[str, ErdPane] = {}
         self._erd_hint = QLabel(tr("The database diagram will appear here."))
         self._erd_hint.setProperty("muted", True)
         self._erd_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self._erd_hint, 1)
+        self._erd_hint.setWordWrap(True)
+        self.erd_stack.addWidget(self._erd_hint)
+        layout.addWidget(self.erd_stack, 1)
+        self._erd_pane_widget = pane
         return pane
 
     # ------------------------------------------------------------------ actions
@@ -222,6 +268,70 @@ class MainWindow(QMainWindow):
                 password = typed
         manager.activate(connection_id, password)
 
+    def go_to_table(self) -> None:
+        """Ctrl+P: pick a table or column of the active connection and show it."""
+        session = self._services.manager.active
+        schema = session.schema if session is not None else None
+        if session is None or schema is None:
+            self._status_label.setText(tr("The database structure is not loaded yet."))
+            return
+        dialog = QuickOpenDialog(schema, self)
+        if dialog.exec() and dialog.chosen is not None:
+            table, _column = dialog.chosen
+            pane = self._erd_panes.get(session.id)
+            if pane is not None:
+                pane.focus_table(table.key)
+            self._open_table(session.id, table)
+
+    def refresh_schema(self) -> None:
+        session = self._services.manager.active
+        if session is not None and session.state is SessionState.READY:
+            session.load_schema()
+
+    def current_pane(self) -> ErdPane | None:
+        widget = self.erd_stack.currentWidget()
+        return widget if isinstance(widget, ErdPane) else None
+
+    def fit_diagram(self) -> None:
+        pane = self.current_pane()
+        if pane is not None:
+            pane.view.fit_all()
+
+    def reset_diagram(self) -> None:
+        pane = self.current_pane()
+        if pane is not None:
+            pane.reset_layout()
+
+    def set_erd_collapsed(self, collapsed: bool) -> None:
+        """Shrink the right side to its header (connection switcher) or restore the diagram."""
+        self._erd_collapsed = collapsed
+        self.erd_stack.setVisible(not collapsed)
+        self.collapse_button.setText("⏴" if collapsed else "⏵")
+        self.collapse_button.setToolTip(
+            tr("Show the diagram") if collapsed else tr("Hide the diagram")
+        )
+        self.toggle_diagram_action.setChecked(not collapsed)
+        self._erd_pane_widget.setMaximumWidth(_COLLAPSED_WIDTH if collapsed else 16_777_215)
+        if collapsed:
+            total = sum(self.splitter.sizes())
+            self.splitter.setSizes([total - _COLLAPSED_WIDTH, _COLLAPSED_WIDTH])
+        self._services.db.set_state(_ERD_COLLAPSED_KEY, collapsed)
+
+    def _open_table(self, connection_id: str, table: Table) -> None:
+        workspace = self._workspaces.get(connection_id)
+        if workspace is not None:
+            workspace.open_table(table)
+
+    def _insert_text(self, connection_id: str, text: str) -> None:
+        workspace = self._workspaces.get(connection_id)
+        if workspace is not None:
+            workspace.insert_text(text)
+
+    def _select_all_from(self, connection_id: str, table: Table) -> None:
+        workspace = self._workspaces.get(connection_id)
+        if workspace is not None:
+            workspace.select_all_from(table)
+
     def set_theme(self, name: str) -> None:
         app = QApplication.instance()
         if isinstance(app, QApplication):
@@ -230,6 +340,8 @@ class MainWindow(QMainWindow):
         self._services.settings_store.save(self._services.settings)
         for workspace in self._workspaces.values():
             workspace.refresh_theme()
+        for pane in self._erd_panes.values():
+            pane.refresh_theme()
         self._refresh()
 
     def set_language(self, code: str) -> None:
@@ -264,6 +376,10 @@ class MainWindow(QMainWindow):
             if workspace is not None:
                 session = self._services.manager.session(event.connection_id)
                 workspace.set_session(session if event.state is SessionState.READY else None)
+        if isinstance(event, SchemaChanged):
+            pane = self._erd_panes.get(event.connection_id)
+            if pane is not None:
+                pane.update_from_session()
         if isinstance(event, ActiveChanged | SessionStateChanged):
             self._refresh()
 
@@ -291,6 +407,20 @@ class MainWindow(QMainWindow):
         workspace.set_session(session)
         return workspace
 
+    def _pane_for(self, session: Session) -> ErdPane:
+        pane = self._erd_panes.get(session.id)
+        if pane is None:
+            pane = ErdPane(session, self._services.erd_store, self._services.db)
+            connection_id = session.id
+            pane.tableOpenRequested.connect(lambda t, c=connection_id: self._open_table(c, t))
+            pane.insertRequested.connect(lambda text, c=connection_id: self._insert_text(c, text))
+            pane.selectStarRequested.connect(lambda t, c=connection_id: self._select_all_from(c, t))
+            self._erd_panes[session.id] = pane
+            self.erd_stack.addWidget(pane)
+        else:
+            pane.set_session(session)
+        return pane
+
     def _drop_stale_workspaces(self) -> None:
         known = {c.id for c in self._services.store.all()}
         for connection_id in [i for i in self._workspaces if i not in known]:
@@ -299,6 +429,11 @@ class MainWindow(QMainWindow):
             self.workspaces.removeWidget(workspace)
             workspace.deleteLater()
             self._services.tab_store.forget(connection_id)
+            self._services.erd_store.forget(connection_id)
+            pane = self._erd_panes.pop(connection_id, None)
+            if pane is not None:
+                self.erd_stack.removeWidget(pane)
+                pane.deleteLater()
 
     def set_row_limit(self, count: int) -> None:
         self._services.settings.row_limit = count
@@ -315,8 +450,10 @@ class MainWindow(QMainWindow):
         if session is not None and session.state is SessionState.READY:
             self.workspaces.setCurrentWidget(self._workspace_for(session))
             self.left.setCurrentWidget(self.workspaces)
+            self.erd_stack.setCurrentWidget(self._pane_for(session))
         else:
             self.left.setCurrentWidget(self.panel)
+            self.erd_stack.setCurrentWidget(self._erd_hint)
         tokens = current_tokens()
         if session is None:
             self.setWindowTitle(APP_TITLE)
@@ -352,6 +489,8 @@ class MainWindow(QMainWindow):
         sizes = db.get_state(_SPLITTER_KEY)
         if isinstance(sizes, list) and len(sizes) == 2 and all(isinstance(s, int) for s in sizes):
             self.splitter.setSizes(sizes)
+        if db.get_state(_ERD_COLLAPSED_KEY, False) is True:
+            self.set_erd_collapsed(True)
 
     def _save_state(self) -> None:
         db = self._services.db

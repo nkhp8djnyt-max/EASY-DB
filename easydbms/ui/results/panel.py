@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
@@ -9,6 +11,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QTabBar,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -16,10 +19,12 @@ from PySide6.QtWidgets import (
 
 from ...core.db import QueryError, QueryResult
 from ...core.queries import Outcome, StatementOutcome
+from ...core.schema import TableKey
 from ..i18n import tr
 from ..theme import current_tokens
 from .grid import ResultGrid
 from .model import ResultTableModel
+from .table_tab import TableTab
 
 #: Statements that produce a result set even when it has no rows (and so no known columns).
 _ROW_STATEMENTS = frozenset({"SELECT", "WITH", "VALUES", "TABLE", "SHOW", "EXPLAIN", "("})
@@ -123,7 +128,10 @@ class ResultsPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         self.tabs = QTabWidget()
         self.tabs.setDocumentMode(True)
+        self.tabs.setTabsClosable(True)
+        self.tabs.tabCloseRequested.connect(self._close_requested)
         layout.addWidget(self.tabs)
+        self._table_tabs: dict[TableKey, TableTab] = {}
         self._hint = QLabel(tr("Run a query to see results here."))
         self._hint.setProperty("muted", True)
         self._hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -132,12 +140,53 @@ class ResultsPanel(QWidget):
         self._sync_hint()
 
     def clear(self) -> None:
-        self.tabs.clear()
+        """Remove the statement results; the open table tabs stay."""
+        for index in range(self.tabs.count() - 1, -1, -1):
+            page = self.tabs.widget(index)
+            if not isinstance(page, TableTab):
+                self.tabs.removeTab(index)
+                if page is not None:
+                    page.deleteLater()
         self._counter = 0
         self._sync_hint()
 
     def count(self) -> int:
-        return self.tabs.count()
+        """Tabs of statement results (table tabs are counted by :meth:`table_count`)."""
+        return self.tabs.count() - len(self._table_tabs)
+
+    def table_count(self) -> int:
+        return len(self._table_tabs)
+
+    def table_tab(self, key: TableKey) -> TableTab | None:
+        return self._table_tabs.get(key)
+
+    def show_table(self, key: TableKey, title: str, create: Callable[[], TableTab]) -> TableTab:
+        """Select the tab of table ``key``, creating and loading it on first use."""
+        existing = self._table_tabs.get(key)
+        if existing is not None:
+            self.tabs.setCurrentWidget(existing)
+            return existing
+        tab = create()
+        self._table_tabs[key] = tab
+        index = self.tabs.addTab(tab, "▦ " + title)
+        self.tabs.setTabToolTip(index, tab.reference)
+        self.tabs.setCurrentIndex(index)
+        self._sync_hint()
+        tab.load()
+        return tab
+
+    def _close_requested(self, index: int) -> None:
+        page = self.tabs.widget(index)
+        if isinstance(page, TableTab):
+            self._table_tabs.pop(page.table.key, None)
+            page.shutdown()
+            self.tabs.removeTab(index)
+            page.deleteLater()
+            self._sync_hint()
+
+    def shutdown(self) -> None:
+        for tab in self._table_tabs.values():
+            tab.shutdown()
 
     def add_outcome(self, outcome: StatementOutcome) -> None:
         """Add a tab for one finished statement."""
@@ -167,6 +216,7 @@ class ResultsPanel(QWidget):
             page = _Message(tr("Skipped"), tr("An earlier statement failed or was cancelled."))
             label = tr("Skipped {n}", n=number)
         index = self.tabs.addTab(page, label)
+        self.tabs.tabBar().setTabButton(index, QTabBar.ButtonPosition.RightSide, None)
         if outcome.outcome is Outcome.ERROR:
             self.tabs.tabBar().setTabTextColor(index, QColor(current_tokens().danger))
         if self.tabs.count() == 1 or outcome.outcome is Outcome.ERROR:

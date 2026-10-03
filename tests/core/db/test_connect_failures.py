@@ -23,8 +23,7 @@ from easydbms.core.db import (
     create_client,
 )
 from easydbms.core.db.diagnostics import network_steps
-
-from .conftest import UNSET, Target, Unset
+from tests.core.conftest import UNSET, Target, Unset
 
 
 def server_target(target: Target) -> ServerConnection:

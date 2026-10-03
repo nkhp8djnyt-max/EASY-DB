@@ -11,8 +11,8 @@ from easydbms.core.db import DatabaseClient
 from easydbms.core.dialects import split_statements
 from easydbms.core.queries import Outcome, ScriptRun, StatementOutcome
 from easydbms.core.session import Session
+from tests.core.conftest import Target
 
-from .conftest import Target
 from .test_clients import SLOW_QUERY
 
 pytestmark = pytest.mark.integration

@@ -1,9 +1,12 @@
 # Benchmarks
 
-Two things are measured, both reproducible from this directory:
+Three things are measured, all reproducible from this directory:
 
 * `simd_micro.py` — the acceleration layer (native SIMD scanner, Arrow/NumPy sorting and filtering)
   against its pure Python reference.
+* `schema_bench.py` — reading a synthetic N-table schema with EasyDBMS's bulk catalog queries against
+  SQLAlchemy reflection (PostgreSQL, MariaDB, SQLite), plus diagram layout and Qt scene timings.
+  Needs two empty scratch databases (`SB_POSTGRES_URL`, `SB_MYSQL_URL`; it creates and drops `sb_t*` tables).
 * `clickbench/` — the 43 [ClickBench](https://github.com/ClickHouse/ClickBench) queries through
   **EasyDBMS's database clients**, next to the same drivers used directly, and to DuckDB and
   ClickHouse as analytical reference points. Reports are written to `benchmarks/results/`.
@@ -33,6 +36,10 @@ runs of the application client and of the raw driver, so neither one warms the c
 * The speed of an engine is the engine's. What this project controls is the **overhead of its own
   layer**: the "app vs raw driver" table. The editor and grid are meant to add nothing measurable to
   a query; they are not meant to make PostgreSQL scan faster.
+* **Connection-to-connection noise.** Two connections of the same driver to the same MariaDB server differ
+  by about 3 % on this suite (measured: two plain PyMySQL connections, 3.3 % apart), so an "app vs raw
+  driver" difference of that size is not a finding. Run-order effects were ruled out by swapping the
+  order of the runners.
 * *Relative score* is the ClickBench formula: geometric mean over queries of
   `(t + 10 ms) / (fastest runner's t + 10 ms)`. A failed or timed-out query counts as twice the
   slowest successful time of that query (this project's convention).

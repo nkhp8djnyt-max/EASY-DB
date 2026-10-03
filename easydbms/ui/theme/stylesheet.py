@@ -50,6 +50,7 @@ QPushButton[primary="true"]:disabled {{ background-color: {t.panel_alt}; color: 
 QPushButton[flat="true"], QToolButton[flat="true"] {{ background: transparent; border-color: transparent; }}
 QPushButton[danger="true"]:hover {{ color: {t.danger}; border-color: {t.danger}; }}
 QToolButton::menu-indicator {{ image: none; width: 0; }}
+QToolButton[compact="true"] {{ padding: 0px; font-size: 15px; font-weight: 600; }}
 QToolButton[switcher="true"] {{ padding: 6px 12px; font-weight: 600; }}
 QToolButton[switcher="true"][production="true"] {{ border-color: {t.danger}; }}
 

@@ -15,7 +15,7 @@ from ..connections import (
     ServerConnection,
 )
 from ..db import create_client
-from .session import ClientFactory, Session, SessionState, SessionStateChanged
+from .session import ClientFactory, Session, SessionEvent, SessionState
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,7 +25,7 @@ class ActiveChanged:
     connection_id: str | None
 
 
-ManagerEvent = SessionStateChanged | ActiveChanged
+ManagerEvent = SessionEvent | ActiveChanged
 
 
 class ConnectionManager:
@@ -45,12 +45,14 @@ class ConnectionManager:
         environ: Mapping[str, str] | None = None,
         client_factory: ClientFactory = create_client,
         max_workers: int = 4,
+        load_schema: bool = False,
     ) -> None:
         self._store = store
         self._secrets = secrets
         self._listener = listener
         self._environ = environ
         self._client_factory = client_factory
+        self._load_schema = load_schema
         self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="connect")
         self._lock = threading.RLock()
         self._sessions: dict[str, Session] = {}
@@ -163,6 +165,8 @@ class ConnectionManager:
             session.fail(error)
         else:
             session.connect(password, self._environ)
+            if self._load_schema and session.state is SessionState.READY:
+                session.load_schema()  # runs on the session's meta lane, not on this thread
         return session
 
     def _password_for(self, session: Session) -> str | None:
@@ -174,7 +178,7 @@ class ConnectionManager:
             return None
         return self._secrets.get(config.id)
 
-    def _forward(self, event: SessionStateChanged) -> None:
+    def _forward(self, event: SessionEvent) -> None:
         self._emit(event)
 
     def _emit(self, event: ManagerEvent) -> None:
