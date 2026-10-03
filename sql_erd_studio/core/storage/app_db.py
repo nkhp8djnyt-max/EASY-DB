@@ -30,6 +30,20 @@ MIGRATIONS: tuple[Migration, ...] = (
         "key/value store for UI state (window geometry, splitter sizes, last connection)",
         ("CREATE TABLE ui_state (key TEXT PRIMARY KEY, value TEXT NOT NULL)",),
     ),
+    Migration(
+        2,
+        "query editor tabs, restored per connection",
+        (
+            "CREATE TABLE query_tabs ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " connection_id TEXT NOT NULL,"
+            " position INTEGER NOT NULL,"
+            " title TEXT NOT NULL,"
+            " sql TEXT NOT NULL,"
+            " dialect TEXT NOT NULL)",
+            "CREATE INDEX query_tabs_connection ON query_tabs (connection_id, position)",
+        ),
+    ),
 )
 
 
@@ -74,6 +88,18 @@ class AppDatabase:
         """Run one statement with bound parameters; returns the rows (empty for commands)."""
         with self._lock:
             return list(self._conn.execute(sql, params).fetchall())
+
+    def run_atomically(self, statements: Sequence[tuple[str, Sequence[Any]]]) -> None:
+        """Execute ``(sql, params)`` pairs in one transaction: all of them or none."""
+        with self._lock:
+            self._conn.execute("BEGIN IMMEDIATE")
+            try:
+                for sql, params in statements:
+                    self._conn.execute(sql, params)
+            except BaseException:
+                self._conn.execute("ROLLBACK")
+                raise
+            self._conn.execute("COMMIT")
 
     # ------------------------------------------------------------------ ui_state
 

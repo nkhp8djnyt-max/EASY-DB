@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from .connections import ConnectionStore, SecretStore, choose_secret_store
 from .paths import AppPaths
+from .queries import QueryTabStore
 from .session import ConnectionManager, ManagerEvent
 from .storage import AppDatabase, AppSettings, SettingsStore
 
@@ -20,6 +21,7 @@ class Services:
     store: ConnectionStore
     secrets: SecretStore
     manager: ConnectionManager
+    tab_store: QueryTabStore
 
     def close(self) -> None:
         self.manager.close_all()
@@ -38,12 +40,14 @@ def build_services(
     settings_store = SettingsStore(paths.settings_file)
     store = ConnectionStore(paths.connections_file)
     chosen_secrets = secrets or choose_secret_store(paths.vault_file)
+    db = AppDatabase(paths.app_db)
     return Services(
         paths=paths,
         settings_store=settings_store,
         settings=settings_store.load(),
-        db=AppDatabase(paths.app_db),
+        db=db,
         store=store,
         secrets=chosen_secrets,
         manager=ConnectionManager(store, chosen_secrets, listener=listener, environ=environ),
+        tab_store=QueryTabStore(db),
     )

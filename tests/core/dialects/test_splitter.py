@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Iterator
 
 import pytest
 
+from sql_erd_studio.core import simd
 from sql_erd_studio.core.dialects import (
     MYSQL,
     POSTGRESQL,
@@ -13,6 +15,16 @@ from sql_erd_studio.core.dialects import (
     split_statements,
     statement_at,
 )
+
+
+@pytest.fixture(autouse=True, params=["native", "python"])
+def splitter_mode(request: pytest.FixtureRequest) -> Iterator[None]:
+    """Every test here runs against both splitters (the native one only if it was built)."""
+    if request.param == "native" and not simd.available():
+        pytest.skip("native extension not built")
+    simd.set_enabled(request.param == "native")
+    yield
+    simd.set_enabled(True)
 
 
 def texts(sql: str, dialect: Dialect) -> list[str]:

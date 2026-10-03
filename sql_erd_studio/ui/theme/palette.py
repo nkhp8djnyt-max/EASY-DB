@@ -82,3 +82,31 @@ COLOR_HEX: dict[ConnectionColor, str] = {
 
 def color_hex(color: ConnectionColor | None, fallback: str = "#6e7681") -> str:
     return COLOR_HEX[color] if color is not None else fallback
+
+
+@dataclass(frozen=True, slots=True)
+class SyntaxColors:
+    keyword: str
+    function: str
+    string: str
+    number: str
+    comment: str
+    identifier: str
+    parameter: str
+    error: str
+    current_line: str
+    bracket: str
+
+
+SYNTAX: dict[str, SyntaxColors] = {
+    "dark": SyntaxColors(
+        keyword="#b392f0", function="#79b8ff", string="#9ecb7b", number="#f0a868",
+        comment="#6a737d", identifier="#56d4c8", parameter="#e3b341", error="#e5534b",
+        current_line="#262b33", bracket="#3b4a68",
+    ),
+    "light": SyntaxColors(
+        keyword="#6f42c1", function="#0b5fd0", string="#1a7f37", number="#b35900",
+        comment="#6e7781", identifier="#0a7a72", parameter="#9a6700", error="#cf222e",
+        current_line="#eef3fb", bracket="#c8dafc",
+    ),
+}  # fmt: skip

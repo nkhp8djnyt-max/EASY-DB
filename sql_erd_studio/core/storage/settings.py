@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Literal
 
 import tomli_w
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 
 class AppSettings(BaseModel):
@@ -18,6 +18,8 @@ class AppSettings(BaseModel):
     theme: Literal["dark", "light"] = "dark"
     #: ``auto`` follows the system locale (Russian for ``ru*``, English otherwise).
     language: Literal["auto", "ru", "en"] = "auto"
+    #: Most rows a query result keeps; the rest is cut off (and reported) to protect memory.
+    row_limit: int = Field(default=1000, ge=1, le=10_000_000)
 
 
 class SettingsStore:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from PySide6.QtCore import QByteArray, Qt
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QKeySequence
 from PySide6.QtWidgets import (
@@ -15,6 +17,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QSplitter,
+    QStackedWidget,
     QToolBar,
     QVBoxLayout,
     QWidget,
@@ -22,7 +25,7 @@ from PySide6.QtWidgets import (
 
 from ..core.connections import ServerConnection
 from ..core.services import Services
-from ..core.session import ActiveChanged, SessionState, SessionStateChanged
+from ..core.session import ActiveChanged, Session, SessionState, SessionStateChanged
 from .connection_dialog import ConnectionDialog
 from .db_switcher import DbSwitcher
 from .i18n import tr
@@ -30,6 +33,7 @@ from .runtime import BackgroundRunner, EventBridge
 from .secrets_ui import ensure_unlocked
 from .session_panel import SessionPanel
 from .theme import apply_theme, current_tokens
+from .workspace import QueryWorkspace
 
 APP_TITLE = "SQL ERD Studio"
 _GEOMETRY_KEY = "window/geometry"
@@ -65,6 +69,29 @@ class MainWindow(QMainWindow):
         file_menu.addAction(connections)
         file_menu.addSeparator()
         file_menu.addAction(quit_action)
+
+        query_menu = self.menuBar().addMenu(tr("&Query"))
+        for text, shortcut, handler in (
+            (tr("&Run"), "Ctrl+Return", lambda w: w.run_current()),
+            (tr("Run &script"), "F5", lambda w: w.run_script()),
+            (tr("S&top"), "Esc", lambda w: w.cancel()),
+            (tr("&Format"), "Ctrl+Shift+F", lambda w: w.format_current()),
+            (tr("&New tab"), "Ctrl+T", lambda w: w.new_tab()),
+            (tr("&Close tab"), "Ctrl+W", lambda w: w.close_current_tab()),
+        ):
+            action = QAction(text, self)
+            action.setShortcut(QKeySequence(shortcut))
+            action.triggered.connect(lambda _checked=False, h=handler: self._with_workspace(h))
+            query_menu.addAction(action)
+        query_menu.addSeparator()
+        limit_menu = query_menu.addMenu(tr("Row limit"))
+        limits = QActionGroup(self)
+        for count in (100, 1000, 10_000, 100_000):
+            action = QAction(f"{count:,}", self, checkable=True)
+            action.setChecked(self._services.settings.row_limit == count)
+            action.triggered.connect(lambda _checked=False, c=count: self.set_row_limit(c))
+            limits.addAction(action)
+            limit_menu.addAction(action)
 
         view_menu = self.menuBar().addMenu(tr("&View"))
         themes = QActionGroup(self)
@@ -112,17 +139,22 @@ class MainWindow(QMainWindow):
 
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
         self.splitter.setChildrenCollapsible(False)
+        self.left = QStackedWidget()
+        self.workspaces = QStackedWidget()
+        self._workspaces: dict[str, QueryWorkspace] = {}
         self.panel = SessionPanel()
         self.panel.manageRequested.connect(lambda: self.open_connections())
         self.panel.retryRequested.connect(self.activate)
         self.panel.editRequested.connect(lambda cid: self.open_connections(cid))
         self.panel.disconnectRequested.connect(self._services.manager.disconnect)
         self.panel.cancelRequested.connect(self._services.manager.disconnect)
-        self.splitter.addWidget(self.panel)
+        self.left.addWidget(self.panel)
+        self.left.addWidget(self.workspaces)
+        self.splitter.addWidget(self.left)
         self.splitter.addWidget(self._build_erd_pane())
         self.splitter.setStretchFactor(0, 1)
         self.splitter.setStretchFactor(1, 1)
-        self.splitter.setSizes([560, 680])
+        self.splitter.setSizes([700, 540])
         column.addWidget(self.splitter, 1)
         self.setCentralWidget(container)
         self._status_label = QLabel()
@@ -196,6 +228,8 @@ class MainWindow(QMainWindow):
             apply_theme(app, name)
         self._services.settings.theme = name  # type: ignore[assignment]
         self._services.settings_store.save(self._services.settings)
+        for workspace in self._workspaces.values():
+            workspace.refresh_theme()
         self._refresh()
 
     def set_language(self, code: str) -> None:
@@ -225,14 +259,64 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ state
 
     def _on_event(self, event: object) -> None:
+        if isinstance(event, SessionStateChanged):
+            workspace = self._workspaces.get(event.connection_id)
+            if workspace is not None:
+                session = self._services.manager.session(event.connection_id)
+                workspace.set_session(session if event.state is SessionState.READY else None)
         if isinstance(event, ActiveChanged | SessionStateChanged):
             self._refresh()
+
+    # ------------------------------------------------------------------ workspaces
+
+    def current_workspace(self) -> QueryWorkspace | None:
+        widget = self.workspaces.currentWidget()
+        return widget if isinstance(widget, QueryWorkspace) else None
+
+    def _with_workspace(self, action: Callable[[QueryWorkspace], None]) -> None:
+        workspace = self.current_workspace()
+        if workspace is not None and self.left.currentWidget() is self.workspaces:
+            action(workspace)
+
+    def _workspace_for(self, session: Session) -> QueryWorkspace:
+        workspace = self._workspaces.get(session.id)
+        if workspace is None:
+            workspace = QueryWorkspace(
+                session.config,
+                self._services.tab_store,
+                lambda: self._services.settings.row_limit,
+            )
+            self._workspaces[session.id] = workspace
+            self.workspaces.addWidget(workspace)
+        workspace.set_session(session)
+        return workspace
+
+    def _drop_stale_workspaces(self) -> None:
+        known = {c.id for c in self._services.store.all()}
+        for connection_id in [i for i in self._workspaces if i not in known]:
+            workspace = self._workspaces.pop(connection_id)
+            workspace.shutdown()
+            self.workspaces.removeWidget(workspace)
+            workspace.deleteLater()
+            self._services.tab_store.forget(connection_id)
+
+    def set_row_limit(self, count: int) -> None:
+        self._services.settings.row_limit = count
+        self._services.settings_store.save(self._services.settings)
 
     def _refresh(self) -> None:
         manager = self._services.manager
         session = manager.active
+        if session is not None and self._services.store.find(session.id) is None:
+            session = None  # its connection was deleted: nothing to show
         self.switcher.refresh()
         self.panel.show_session(session)
+        self._drop_stale_workspaces()
+        if session is not None and session.state is SessionState.READY:
+            self.workspaces.setCurrentWidget(self._workspace_for(session))
+            self.left.setCurrentWidget(self.workspaces)
+        else:
+            self.left.setCurrentWidget(self.panel)
         tokens = current_tokens()
         if session is None:
             self.setWindowTitle(APP_TITLE)
@@ -277,6 +361,8 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent) -> None:
         if not self._closed:  # a second close request must not touch the closed services
             self._closed = True
+            for workspace in self._workspaces.values():
+                workspace.shutdown()
             self._save_state()
             self._runner.shutdown()
             self._services.close()

@@ -19,7 +19,7 @@ def test_save_and_load_round_trip(tmp_path: Path) -> None:
     path = tmp_path / "config" / "settings.toml"
     store = SettingsStore(path)
     store.save(AppSettings(theme="light", language="ru"))
-    assert path.read_text() == 'theme = "light"\nlanguage = "ru"\n'
+    assert path.read_text() == 'theme = "light"\nlanguage = "ru"\nrow_limit = 1000\n'
     loaded = SettingsStore(path).load()
     assert (loaded.theme, loaded.language) == ("light", "ru")
     assert [p.name for p in path.parent.iterdir()] == ["settings.toml"]
@@ -46,3 +46,12 @@ def test_assignment_is_validated() -> None:
     settings = AppSettings()
     with pytest.raises(ValueError, match="theme"):
         settings.theme = "neon"  # type: ignore[assignment]
+
+
+def test_row_limit_is_validated_and_persisted(tmp_path: Path) -> None:
+    store = SettingsStore(tmp_path / "settings.toml")
+    store.save(AppSettings(row_limit=250))
+    assert store.load().row_limit == 250
+    for bad in (0, -5):
+        with pytest.raises(ValueError, match="row_limit"):
+            AppSettings(row_limit=bad)

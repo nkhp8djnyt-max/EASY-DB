@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
+from PySide6.QtGui import QAction
 from pytestqt.qtbot import QtBot
 
 from sql_erd_studio.core.connections import VaultSecretStore
@@ -50,7 +51,7 @@ def test_the_layout_has_the_panel_on_the_left_and_the_switcher_on_the_right(
     env: Env, qtbot: QtBot
 ) -> None:
     window = make_window(env, qtbot)
-    assert window.splitter.widget(0) is window.panel
+    assert window.splitter.widget(0) is window.left
     right = window.splitter.widget(1)
     assert right is not None
     assert window.switcher in right.findChildren(type(window.switcher))
@@ -314,3 +315,156 @@ def test_no_startup_notice_when_everything_is_fine(
     window.show_startup_notices()
     assert prompts.messages == []
     assert json.loads(json.dumps(env.services.settings.model_dump()))["theme"] == "dark"
+
+
+# ---------------------------------------------------------------------------- stage 2: workspace
+
+
+def menu_action(window: MainWindow, menu: str, text: str) -> QAction:
+    for top in window.menuBar().actions():
+        submenu = top.menu()
+        if top.text() == menu and submenu is not None:
+            for action in submenu.actions():  # type: ignore[attr-defined]
+                if action.text() == text:
+                    return action  # type: ignore[no-any-return]
+    raise AssertionError(f"no menu action {menu} > {text}")
+
+
+def test_the_workspace_replaces_the_info_panel_once_connected(env: Env, qtbot: QtBot) -> None:
+    config = env.add_sqlite("Shop")
+    window = make_window(env, qtbot)
+    assert window.left.currentWidget() is window.panel
+    window.activate(config.id)
+    qtbot.waitUntil(lambda: window.left.currentWidget() is window.workspaces, timeout=10000)
+    workspace = window.current_workspace()
+    assert workspace is not None
+    assert workspace.config.id == config.id
+    assert workspace.run_button.isEnabled()
+
+
+def test_a_failed_connection_shows_the_info_panel_again(env: Env, qtbot: QtBot) -> None:
+    config = env.add_sqlite("Shop")
+    window = make_window(env, qtbot)
+    window.activate(config.id)
+    qtbot.waitUntil(lambda: window.left.currentWidget() is window.workspaces, timeout=10000)
+    window.panel.disconnectRequested.emit(config.id)
+    qtbot.waitUntil(lambda: window.left.currentWidget() is window.panel, timeout=5000)
+    workspace = window._workspaces[config.id]
+    assert not workspace.run_button.isEnabled()  # the workspace is kept, but cannot run
+    window.activate(config.id)
+    qtbot.waitUntil(lambda: window.left.currentWidget() is window.workspaces, timeout=10000)
+    assert window.current_workspace() is workspace  # same tabs as before
+
+
+def test_each_connection_has_its_own_workspace(env: Env, qtbot: QtBot) -> None:
+    a, b = env.add_sqlite("alpha"), env.add_sqlite("beta")
+    window = make_window(env, qtbot)
+    window.activate(a.id)
+    qtbot.waitUntil(lambda: a.id in window._workspaces, timeout=10000)
+    window._workspaces[a.id].current_tab().editor.setPlainText("select 'a'")  # type: ignore[union-attr]
+    window.activate(b.id)
+    qtbot.waitUntil(lambda: b.id in window._workspaces, timeout=10000)
+    assert window._workspaces[b.id].current_tab().editor.text() == ""  # type: ignore[union-attr]
+    window.activate(a.id)
+    qtbot.waitUntil(lambda: window.current_workspace() is window._workspaces[a.id], timeout=10000)
+    assert window.current_workspace().current_tab().editor.text() == "select 'a'"  # type: ignore[union-attr]
+
+
+def test_the_query_menu_runs_queries(env: Env, qtbot: QtBot) -> None:
+    config = env.add_sqlite("Shop")
+    window = make_window(env, qtbot)
+    window.activate(config.id)
+    qtbot.waitUntil(lambda: window.left.currentWidget() is window.workspaces, timeout=10000)
+    workspace = window.current_workspace()
+    assert workspace is not None
+    tab = workspace.current_tab()
+    assert tab is not None
+    tab.editor.setPlainText("select 1 as one")
+    tab.editor.go_to(3)
+    menu_action(window, "&Query", "&Run").trigger()
+    qtbot.waitUntil(lambda: tab.results.count() == 1, timeout=10000)
+    menu_action(window, "&Query", "&New tab").trigger()
+    assert workspace.tabs.count() == 2
+    menu_action(window, "&Query", "&Close tab").trigger()
+    assert workspace.tabs.count() == 1
+
+
+def test_query_shortcuts_are_the_documented_ones(env: Env, qtbot: QtBot) -> None:
+    window = make_window(env, qtbot)
+    shortcuts = {
+        text: menu_action(window, "&Query", text).shortcut().toString()
+        for text in ("&Run", "Run &script", "S&top", "&Format", "&New tab", "&Close tab")
+    }
+    assert shortcuts == {
+        "&Run": "Ctrl+Return",
+        "Run &script": "F5",
+        "S&top": "Esc",
+        "&Format": "Ctrl+Shift+F",
+        "&New tab": "Ctrl+T",
+        "&Close tab": "Ctrl+W",
+    }
+
+
+def test_query_actions_do_nothing_without_a_workspace(env: Env, qtbot: QtBot) -> None:
+    window = make_window(env, qtbot)
+    menu_action(window, "&Query", "&Run").trigger()  # no connection yet: must not raise
+
+
+def test_the_row_limit_menu_persists_the_choice(env: Env, qtbot: QtBot) -> None:
+    window = make_window(env, qtbot)
+    window.set_row_limit(100)
+    assert SettingsStore(env.services.paths.settings_file).load().row_limit == 100
+    config = env.add_sqlite("Shop")
+    window.activate(config.id)
+    qtbot.waitUntil(lambda: window.current_workspace() is not None, timeout=10000)
+    tab = window.current_workspace().current_tab()  # type: ignore[union-attr]
+    tab.editor.setPlainText(  # type: ignore[union-attr]
+        "with recursive c(x) as (select 1 union all select x + 1 from c where x < 500) "
+        "select x from c"
+    )
+    tab.editor.go_to(3)  # type: ignore[union-attr]
+    window.current_workspace().run_current()  # type: ignore[union-attr]
+    qtbot.waitUntil(lambda: tab.results.count() == 1, timeout=10000)  # type: ignore[union-attr]
+    assert tab.results.current_page().model.rowCount() == 100  # type: ignore[union-attr]
+
+
+def test_deleting_a_connection_drops_its_workspace_and_saved_tabs(env: Env, qtbot: QtBot) -> None:
+    config = env.add_sqlite("Shop")
+    window = make_window(env, qtbot)
+    window.activate(config.id)
+    qtbot.waitUntil(lambda: config.id in window._workspaces, timeout=10000)
+    window._workspaces[config.id].current_tab().editor.setPlainText("select 1")  # type: ignore[union-attr]
+    window._workspaces[config.id].flush()
+    assert env.services.tab_store.load(config.id)
+    env.services.store.remove(config.id)
+    window._refresh()
+    assert config.id not in window._workspaces
+    assert env.services.tab_store.load(config.id) == []
+
+
+def test_tabs_survive_a_restart(env: Env, qtbot: QtBot) -> None:
+    config = env.add_sqlite("Shop")
+    first = make_window(env, qtbot)
+    first.activate(config.id)
+    qtbot.waitUntil(lambda: config.id in first._workspaces, timeout=10000)
+    workspace = first._workspaces[config.id]
+    workspace.current_tab().editor.setPlainText("select 'remember me'")  # type: ignore[union-attr]
+    workspace.new_tab("Second", "select 2")
+    first.close()
+
+    bridge = EventBridge()
+    services = build_services(
+        AppPaths.under(env.tmp_path), listener=bridge.post, secrets=env.secrets
+    )
+    second = MainWindow(services, bridge, BackgroundRunner())
+    qtbot.addWidget(second)
+    try:
+        second.activate(config.id)
+        qtbot.waitUntil(lambda: config.id in second._workspaces, timeout=10000)
+        restored = second._workspaces[config.id]
+        assert [restored.tabs.tabText(i) for i in range(2)] == ["Query 1", "Second"]
+        first_tab = restored.tabs.widget(0)
+        assert first_tab is not None
+        assert first_tab.editor.text() == "select 'remember me'"  # type: ignore[attr-defined]
+    finally:
+        second.close()

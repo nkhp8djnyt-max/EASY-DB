@@ -1,6 +1,6 @@
 [build-system]
-requires = ["hatchling>=1.25"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=70"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "sql-erd-studio"
@@ -17,6 +17,8 @@ dependencies = [
     "tomli-w>=1.0",
     "psycopg[binary]>=3.2",
     "PyMySQL>=1.1",
+    "numpy>=2.0",
+    "pyarrow>=17",
 ]
 
 [project.optional-dependencies]
@@ -36,8 +38,11 @@ dev = [
 [project.gui-scripts]
 sql-erd-studio = "sql_erd_studio.app:main"
 
-[tool.hatch.build.targets.wheel]
-packages = ["sql_erd_studio"]
+[tool.setuptools.packages.find]
+include = ["sql_erd_studio*"]
+
+[tool.setuptools.package-data]
+sql_erd_studio = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -59,6 +64,8 @@ ignore = ["SIM905"]
 [tool.ruff.lint.per-file-ignores]
 "sql_erd_studio/ui/theme/stylesheet.py" = ["E501"]  # CSS lines
 "sql_erd_studio/ui/catalog_ru.py" = ["E501", "RUF001", "RUF003"]  # translations: long, Cyrillic
+"benchmarks/**" = ["E501", "RUF001"]  # long SQL strings, "×" in reports
+"tests/core/simd/*" = ["RUF001", "RUF003"]  # ambiguous characters are the point of the fuzz corpus
 
 [tool.mypy]
 python_version = "3.12"
@@ -69,3 +76,7 @@ files = ["sql_erd_studio", "tests"]
 # keyring ships untyped base classes; the fake backend in the tests has to subclass them.
 module = "tests.core.connections.test_secrets"
 disallow_untyped_calls = false
+
+[[tool.mypy.overrides]]
+module = ["pyarrow", "pyarrow.*"]
+ignore_missing_imports = true

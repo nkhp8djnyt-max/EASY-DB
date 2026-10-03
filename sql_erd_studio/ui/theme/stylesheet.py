@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QApplication
 
-from .assets import check_icon_path
-from .palette import THEMES, Tokens
+from .assets import check_icon_path, close_icon_path
+from .palette import SYNTAX, THEMES, SyntaxColors, Tokens
 
 
 def build_stylesheet(t: Tokens) -> str:
@@ -70,6 +70,13 @@ QTabWidget::pane {{ border: 1px solid {t.border}; border-radius: 6px; top: -1px;
 QTabBar::tab {{ background: transparent; color: {t.text_muted}; padding: 7px 16px; border: none; border-bottom: 2px solid transparent; }}
 QTabBar::tab:selected {{ color: {t.text}; border-bottom: 2px solid {t.accent}; }}
 QTabBar::tab:hover {{ color: {t.text}; }}
+QTabBar::close-button {{ image: url({close_icon_path(t.text_muted)}); subcontrol-position: right; margin: 2px; border-radius: 3px; }}
+QTabBar::close-button:hover {{ image: url({close_icon_path(t.text)}); background: {t.hover}; }}
+
+QTableView {{ background-color: {t.panel}; alternate-background-color: {t.panel_alt}; gridline-color: {t.border}; color: {t.text}; selection-background-color: {t.selection}; selection-color: {t.text}; border: none; }}
+QTableView::item {{ padding: 0 6px; }}
+QHeaderView::section {{ background-color: {t.panel_alt}; color: {t.text_muted}; border: none; border-right: 1px solid {t.border}; border-bottom: 1px solid {t.border}; padding: 5px 8px; font-weight: 600; }}
+QTableCornerButton::section {{ background-color: {t.panel_alt}; border: none; }}
 
 QMenuBar {{ background-color: {t.panel}; }}
 QMenuBar::item:selected {{ background-color: {t.hover}; }}
@@ -113,3 +120,7 @@ def current_tokens() -> Tokens:
     app = QApplication.instance()
     name = app.property(THEME_PROPERTY) if app is not None else None
     return THEMES.get(str(name), THEMES["dark"])
+
+
+def current_syntax() -> SyntaxColors:
+    return SYNTAX[current_tokens().name]

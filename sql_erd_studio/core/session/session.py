@@ -5,12 +5,14 @@ from __future__ import annotations
 import os
 import threading
 from collections.abc import Callable, Mapping
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import StrEnum
 
 from ..connections import FileConnection, ServerConnection, resolve_config
-from ..db import DatabaseClient, DbError, create_client
-from ..dialects import ServerInfo
+from ..db import DatabaseClient, DbError, NotConnectedError, create_client
+from ..dialects import ServerInfo, Statement
+from ..queries import ScriptRun, StatementOutcome
 
 ClientFactory = Callable[[ServerConnection | FileConnection, str | None], DatabaseClient]
 
@@ -56,6 +58,7 @@ class Session:
         self._client: DatabaseClient | None = None
         #: Bumped by ``disconnect`` so a connect that finishes afterwards knows it was abandoned.
         self._epoch = 0
+        self._lane: ThreadPoolExecutor | None = None
 
     @property
     def id(self) -> str:
@@ -122,9 +125,28 @@ class Session:
             epoch = self._epoch
         self._finish(epoch, SessionState.ERROR, error=error)
 
+    def run_script(
+        self,
+        statements: list[Statement],
+        row_limit: int,
+        on_outcome: Callable[[int, StatementOutcome], None] | None = None,
+    ) -> ScriptRun:
+        """Start ``statements`` on this connection's query lane (one at a time, in order)."""
+        with self._lock:
+            client = self.client
+            if client is None:
+                raise NotConnectedError("not connected")
+            if self._lane is None:
+                self._lane = ThreadPoolExecutor(max_workers=1, thread_name_prefix="query")
+            lane = self._lane
+        return ScriptRun(client, statements, row_limit, on_outcome).start_on(lane.submit)
+
     def disconnect(self) -> None:
         with self._lock:
             self._epoch += 1
+            lane, self._lane = self._lane, None
+            if lane is not None:
+                lane.shutdown(wait=False, cancel_futures=True)
             client, self._client = self._client, None
             was_idle = self._state is SessionState.DISCONNECTED
             self._error = None

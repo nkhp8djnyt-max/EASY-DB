@@ -30,3 +30,23 @@ def check_icon_path(color: str) -> str:
         painter.end()
         pixmap.save(str(path), "PNG")
     return path.as_posix()
+
+
+def close_icon_path(color: str) -> str:
+    """Path of a small "x" PNG in ``color`` (tab close buttons); created if missing."""
+    directory = Path(tempfile.gettempdir()) / f"sql-erd-studio-{getpass.getuser()}"
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"close-{color.lstrip('#')}.png"
+    if not path.exists():
+        pixmap = QPixmap(_SIZE, _SIZE)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pen = QPen(QColor(color), 3.6)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen)
+        painter.drawLine(QPointF(10, 10), QPointF(22, 22))
+        painter.drawLine(QPointF(22, 10), QPointF(10, 22))
+        painter.end()
+        pixmap.save(str(path), "PNG")
+    return path.as_posix()

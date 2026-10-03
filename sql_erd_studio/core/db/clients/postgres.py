@@ -9,6 +9,7 @@ import psycopg
 from psycopg import errors as pg_errors
 
 from ...connections import ServerConnection
+from ...dialects import leading_keyword
 from ..base import DatabaseClient, RawResult
 from ..diagnostics import DEFAULT_TIMEOUT, network_steps
 from ..errors import (
@@ -27,6 +28,8 @@ from ..errors import (
     SslError,
 )
 
+#: Statements that return rows; only these are streamed when a row limit is set.
+_ROW_KEYWORDS = frozenset({"SELECT", "WITH", "VALUES", "TABLE", "SHOW", "EXPLAIN", "("})
 _AUTH_STATES = {"28000", "28P01"}
 _NO_DATABASE_STATE = "3D000"
 _READ_ONLY_STATE = "25006"
@@ -71,6 +74,8 @@ class PostgresClient(DatabaseClient):
         return network_steps(self._server_config.host, self._server_config.effective_port, timeout)
 
     def _run(self, raw: Any, sql: str, max_rows: int | None) -> RawResult:
+        if max_rows is not None and leading_keyword(sql, self.dialect) in _ROW_KEYWORDS:
+            return self._run_streaming(raw, sql, max_rows)
         with raw.cursor() as cursor:
             cursor.execute(sql)
             if cursor.description is None:
@@ -80,6 +85,32 @@ class PostgresClient(DatabaseClient):
                 return columns, cursor.fetchall(), None, False
             rows = cursor.fetchmany(max_rows + 1)
             return columns, rows[:max_rows], None, len(rows) > max_rows
+
+    def _run_streaming(self, raw: Any, sql: str, max_rows: int) -> RawResult:
+        """Read at most ``max_rows`` rows without letting libpq buffer the whole result.
+
+        Once more rows exist than wanted, the query is cancelled so the server stops producing.
+        A statement that turns out to return nothing (e.g. ``WITH ... INSERT``) is reported as a
+        command.
+        """
+        with raw.cursor() as cursor:
+            stream = cursor.stream(sql)
+            rows: list[tuple[Any, ...]] = []
+            try:
+                for row in stream:
+                    rows.append(row)
+                    if len(rows) > max_rows:
+                        break
+            except psycopg.ProgrammingError as error:
+                if "didn't produce a result" in str(error):
+                    return (), [], None, False
+                raise
+            truncated = len(rows) > max_rows
+            if truncated:
+                raw.cancel()
+            stream.close()
+            columns = tuple(column.name for column in cursor.description or ())
+            return columns, rows[:max_rows], None, truncated
 
     # ------------------------------------------------------------------ errors
 

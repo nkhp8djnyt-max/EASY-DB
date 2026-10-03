@@ -14,7 +14,7 @@ from .pagination import paginate
 from .parsing import SqlSyntaxError, SyntaxIssue, check_syntax, format_sql, parse
 from .postgresql import POSTGRESQL, PostgresDialect
 from .registry import UnknownDialectError, all_dialects, dialect_from_url, get_dialect
-from .splitter import Statement, split_statements, statement_at
+from .splitter import Statement, leading_keyword, split_statements, statement_at
 from .sqlite import SQLITE, SqliteDialect
 from .translate import Translation, translate
 from .types import LOCK_COMPARABLE, TypeKind
@@ -49,6 +49,7 @@ __all__ = [
     "dialect_from_url",
     "format_sql",
     "get_dialect",
+    "leading_keyword",
     "paginate",
     "parse",
     "split_statements",

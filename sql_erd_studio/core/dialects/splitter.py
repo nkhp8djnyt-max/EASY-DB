@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .. import simd
 from .base import Dialect
 from .lexer import Token, TokenKind, tokenize
 
@@ -39,6 +40,52 @@ class Statement:
 
 def split_statements(sql: str, dialect: Dialect) -> list[Statement]:
     """Return the non-empty statements of ``sql`` (comment-only fragments are dropped)."""
+    native = _split_native(sql, dialect)
+    if native is not None:
+        return native
+    return _split_python(sql, dialect)
+
+
+def _split_native(sql: str, dialect: Dialect) -> list[Statement] | None:
+    """The C splitter's answer, or ``None`` when it is unavailable or declines this input."""
+    if not simd.enabled():
+        return None
+    flags = _native_flags(dialect)
+    if flags is None:
+        return None
+    rows = simd.split_raw(sql, flags)
+    if rows is None:
+        return None
+    return [
+        _statement(
+            sql,
+            begin,
+            end,
+            _keyword(sql, first_start, first_end, first_kind),
+            terminated=bool(terminated),
+        )
+        for begin, end, first_start, first_end, terminated, first_kind in rows
+    ]
+
+
+def _keyword(sql: str, start: int, end: int, kind: int) -> str:
+    if kind == 1:
+        return sql[start:end].upper()
+    return "(" if kind == 2 else ""
+
+
+_FLAGS_BY_DIALECT: dict[str, int | None] = {}
+
+
+def _native_flags(dialect: Dialect) -> int | None:
+    key = dialect.id.value
+    if key not in _FLAGS_BY_DIALECT:
+        _FLAGS_BY_DIALECT[key] = simd.flags_for(dialect.lexer)
+    return _FLAGS_BY_DIALECT[key]
+
+
+def _split_python(sql: str, dialect: Dialect) -> list[Statement]:
+    """Reference implementation; also what runs when the native splitter is not available."""
     tokens = tokenize(sql, dialect)
     statements: list[Statement] = []
     begin = 0  # where the statement being collected starts
@@ -89,6 +136,15 @@ def split_statements(sql: str, dialect: Dialect) -> list[Statement]:
     return statements
 
 
+def leading_keyword(sql: str, dialect: Dialect) -> str:
+    """Upper-case first significant token of ``sql`` (a word or ``(``), ``""`` if there is none."""
+    for token in tokenize(sql[:512], dialect):
+        if token.is_trivia:
+            continue
+        return token.upper if token.kind is TokenKind.WORD or token.text == "(" else ""
+    return ""
+
+
 def statement_at(sql: str, offset: int, dialect: Dialect) -> Statement | None:
     """The statement a cursor at ``offset`` refers to (what Ctrl+Enter should run).
 
@@ -111,9 +167,13 @@ def statement_at(sql: str, offset: int, dialect: Dialect) -> Statement | None:
 
 
 def _build(sql: str, first: Token, begin: int, end: int, *, terminated: bool) -> Statement:
+    keyword = first.upper if first.kind is TokenKind.WORD or first.text == "(" else ""
+    return _statement(sql, begin, end, keyword, terminated=terminated)
+
+
+def _statement(sql: str, begin: int, end: int, keyword: str, *, terminated: bool) -> Statement:
     raw = sql[begin:end]
     text = raw.strip()
-    keyword = first.upper if first.kind is TokenKind.WORD or first.text == "(" else ""
     return Statement(
         start=begin + (len(raw) - len(raw.lstrip())),
         end=end,
