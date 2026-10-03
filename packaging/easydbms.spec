@@ -26,6 +26,7 @@ hiddenimports = [m for m in hiddenimports if m.split(".")[0] not in ("boto3", "b
 
 datas = [
     (str(ROOT / "easydbms" / "py.typed"), "easydbms"),
+    (str(ROOT / "packaging" / "icon.png"), "packaging"),  # the window icon, see ui/icons.py
     *collect_data_files("sqlglot"),
 ]
 binaries = []

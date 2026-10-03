@@ -470,7 +470,7 @@ libdbus-1-3` installed.
 
 ```bash
 uv pip install -e ".[dev,build]"        # + ".[cloud]" to bundle the AWS / Azure / Google SDKs
-python scripts/make_icon.py             # packaging/icon.png and icon.ico from the painted icon (already committed)
+python scripts/make_icon.py [IMAGE]     # packaging/icon.png and icon.ico from the logo image (already committed)
 python scripts/build_app.py --check     # dist/EasyDBMS/ and a --version smoke test
 ```
 

@@ -25,7 +25,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="run the built app with --version")
     args = parser.parse_args()
-    if not (ROOT / "packaging" / "icon.png").exists():
+    if not (ROOT / "packaging" / "icon.ico").exists():  # rebuilt from icon.png
         subprocess.run([sys.executable, str(ROOT / "scripts" / "make_icon.py")], check=True)
     subprocess.run(
         [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "packaging/easydbms.spec"],
