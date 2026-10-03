@@ -3,10 +3,10 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from sql_erd_studio.core.connections import FileConnection, MemorySecretStore
-from sql_erd_studio.core.paths import AppPaths
-from sql_erd_studio.core.services import build_services
-from sql_erd_studio.core.session import ActiveChanged, SessionStateChanged
+from easydbms.core.connections import FileConnection, MemorySecretStore
+from easydbms.core.paths import AppPaths
+from easydbms.core.services import build_services
+from easydbms.core.session import ActiveChanged, SessionStateChanged
 
 
 def test_everything_is_created_under_the_given_paths(tmp_path: Path) -> None:

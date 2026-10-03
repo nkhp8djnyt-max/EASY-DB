@@ -11,10 +11,10 @@ import statistics
 import time
 from collections.abc import Callable
 
-from sql_erd_studio.core import simd
-from sql_erd_studio.core.columnar import ColumnStore
-from sql_erd_studio.core.dialects import POSTGRESQL
-from sql_erd_studio.core.dialects import splitter as splitter_module
+from easydbms.core import simd
+from easydbms.core.columnar import ColumnStore
+from easydbms.core.dialects import POSTGRESQL
+from easydbms.core.dialects import splitter as splitter_module
 
 
 def best_of(fn: Callable[[], object], repeat: int = 7, inner: int = 1) -> float:

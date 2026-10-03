@@ -3,14 +3,14 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from sql_erd_studio.core.connections import (
+from easydbms.core.connections import (
     ConnectionColor,
     FileConnection,
     ServerConnection,
     parse_config,
     replace,
 )
-from sql_erd_studio.core.dialects import MYSQL, POSTGRESQL, SQLITE
+from easydbms.core.dialects import MYSQL, POSTGRESQL, SQLITE
 
 
 def server(**overrides: object) -> ServerConnection:

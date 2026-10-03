@@ -11,14 +11,14 @@ from pathlib import Path
 
 import pytest
 
-from sql_erd_studio.core.connections import (
+from easydbms.core.connections import (
     FileConnection,
     ServerConnection,
     parse_connection_url,
 )
-from sql_erd_studio.core.db import DatabaseClient, create_client
+from easydbms.core.db import DatabaseClient, create_client
 
-_ENV_URLS = {"postgresql": "ERD_TEST_POSTGRES_URL", "mysql": "ERD_TEST_MYSQL_URL"}
+_ENV_URLS = {"postgresql": "EASYDBMS_TEST_POSTGRES_URL", "mysql": "EASYDBMS_TEST_MYSQL_URL"}
 
 
 class Unset:

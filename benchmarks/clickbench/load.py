@@ -14,8 +14,8 @@ from collections.abc import Callable
 
 import duckdb
 
-from sql_erd_studio.core.connections import parse_connection_url
-from sql_erd_studio.core.db import create_client
+from easydbms.core.connections import parse_connection_url
+from easydbms.core.db import create_client
 
 from . import common
 

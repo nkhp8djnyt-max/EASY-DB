@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from sql_erd_studio.core.db.clients.postgres import _clean_connect_message
-from sql_erd_studio.core.db.clients.sqlite import _human_size
+from easydbms.core.db.clients.postgres import _clean_connect_message
+from easydbms.core.db.clients.sqlite import _human_size
 
 
 def test_libpq_reports_both_ssl_attempts_but_the_user_sees_one() -> None:

@@ -32,9 +32,9 @@ from typing import Any
 
 import duckdb
 
-from sql_erd_studio.core import simd
-from sql_erd_studio.core.connections import parse_connection_url
-from sql_erd_studio.core.db import create_client
+from easydbms.core import simd
+from easydbms.core.connections import parse_connection_url
+from easydbms.core.db import create_client
 
 from . import common
 
@@ -234,15 +234,15 @@ class ClickHouse(Runner):
 def build_runners(names: list[str], timeout: float) -> list[Runner]:
     all_runners: dict[str, Callable[[], list[Runner]]] = {
         "postgresql": lambda: [
-            AppRunner("PostgreSQL (SQL ERD Studio)", "postgresql", common.PG_URL),
+            AppRunner("PostgreSQL (EasyDBMS)", "postgresql", common.PG_URL),
             RawPostgres(),
         ],
         "mysql": lambda: [
-            AppRunner("MariaDB (SQL ERD Studio)", "mysql", common.MYSQL_URL),
+            AppRunner("MariaDB (EasyDBMS)", "mysql", common.MYSQL_URL),
             RawMySql(),
         ],
         "sqlite": lambda: [
-            AppRunner("SQLite (SQL ERD Studio)", "sqlite", f"sqlite:///{common.SQLITE_FILE}"),
+            AppRunner("SQLite (EasyDBMS)", "sqlite", f"sqlite:///{common.SQLITE_FILE}"),
             RawSqlite(),
         ],
         "duckdb": lambda: [DuckDb()],

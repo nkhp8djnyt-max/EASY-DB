@@ -11,7 +11,7 @@ from keyring.backend import KeyringBackend
 from keyring.backends import fail
 from keyring.errors import KeyringError, PasswordDeleteError
 
-from sql_erd_studio.core.connections import (
+from easydbms.core.connections import (
     KeyringSecretStore,
     MemorySecretStore,
     SecretStore,
@@ -21,7 +21,7 @@ from sql_erd_studio.core.connections import (
     WrongPasswordError,
     choose_secret_store,
 )
-from sql_erd_studio.core.connections.secrets import keyring_available
+from easydbms.core.connections.secrets import keyring_available
 
 
 class FakeKeyring(KeyringBackend):

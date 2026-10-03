@@ -3,9 +3,9 @@ requires = ["setuptools>=70"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "sql-erd-studio"
+name = "easydbms"
 version = "0.1.0"
-description = "SQL ERD Studio: desktop database client with ERD, editable results and dialect-aware SQL tooling."
+description = "EasyDBMS: desktop database client with ERD, editable results and dialect-aware SQL tooling."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -36,20 +36,20 @@ dev = [
 ]
 
 [project.gui-scripts]
-sql-erd-studio = "sql_erd_studio.app:main"
+easydbms = "easydbms.app:main"
 
 [tool.setuptools.packages.find]
-include = ["sql_erd_studio*"]
+include = ["easydbms*"]
 
 [tool.setuptools.package-data]
-sql_erd_studio = ["py.typed"]
+easydbms = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
 qt_api = "pyside6"
 markers = [
-    "integration: needs a live database; PostgreSQL/MySQL are enabled via ERD_TEST_POSTGRES_URL / ERD_TEST_MYSQL_URL",
+    "integration: needs a live database; PostgreSQL/MySQL are enabled via EASYDBMS_TEST_POSTGRES_URL / EASYDBMS_TEST_MYSQL_URL",
 ]
 
 [tool.ruff]
@@ -62,15 +62,15 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "RUF", "PT"]
 ignore = ["SIM905"]
 
 [tool.ruff.lint.per-file-ignores]
-"sql_erd_studio/ui/theme/stylesheet.py" = ["E501"]  # CSS lines
-"sql_erd_studio/ui/catalog_ru.py" = ["E501", "RUF001", "RUF003"]  # translations: long, Cyrillic
+"easydbms/ui/theme/stylesheet.py" = ["E501"]  # CSS lines
+"easydbms/ui/catalog_ru.py" = ["E501", "RUF001", "RUF003"]  # translations: long, Cyrillic
 "benchmarks/**" = ["E501", "RUF001"]  # long SQL strings, "×" in reports
 "tests/core/simd/*" = ["RUF001", "RUF003"]  # ambiguous characters are the point of the fuzz corpus
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["sql_erd_studio", "tests"]
+files = ["easydbms", "tests"]
 
 [[tool.mypy.overrides]]
 # keyring ships untyped base classes; the fake backend in the tests has to subclass them.

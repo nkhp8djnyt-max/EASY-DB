@@ -7,14 +7,14 @@ from pathlib import Path
 
 import pytest
 
-from sql_erd_studio.core.connections import (
+from easydbms.core.connections import (
     ConnectionNotFoundError,
     ConnectionStore,
     MemorySecretStore,
     VaultSecretStore,
 )
-from sql_erd_studio.core.db import ConnectionFailed, DatabaseFileError
-from sql_erd_studio.core.session import (
+from easydbms.core.db import ConnectionFailed, DatabaseFileError
+from easydbms.core.session import (
     ActiveChanged,
     ConnectionManager,
     Session,

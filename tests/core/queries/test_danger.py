@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from sql_erd_studio.core.dialects import MYSQL, POSTGRESQL, SQLITE, Dialect
-from sql_erd_studio.core.queries import Danger, DangerKind, assess, is_write
+from easydbms.core.dialects import MYSQL, POSTGRESQL, SQLITE, Dialect
+from easydbms.core.queries import Danger, DangerKind, assess, is_write
 
 
 @pytest.mark.parametrize("dialect", [POSTGRESQL, MYSQL, SQLITE], ids=lambda d: d.id.value)

@@ -1,4 +1,4 @@
-# SQL ERD Studio
+# EasyDBMS
 
 Desktop database client in Python: SQL editor, ERD, editable result grid. Supported SQL
 dialects: **PostgreSQL**, **MySQL** (including MariaDB) and **SQLite**. Corporate dialects
@@ -26,14 +26,14 @@ More: [SQLite file](docs/screenshots/connections-dialog-sqlite.png),
 ```bash
 uv venv --python 3.12 && . .venv/bin/activate
 uv pip install -e ".[dev]"        # builds the optional C extension if a compiler is present
-python -m sql_erd_studio          # or: sql-erd-studio
+python -m easydbms          # or: easydbms
 ```
 
-Without a C compiler everything still works (pure-Python fallback); `python -c "from sql_erd_studio.core
+Without a C compiler everything still works (pure-Python fallback); `python -c "from easydbms.core
 import simd; print(simd.status())"` shows what is active.
 
 Config lives in the per-user config directory (`connections.json`, `settings.toml`, `vault.json`)
-and data in the per-user data directory (`app.db`). Set `SQL_ERD_STUDIO_HOME=/some/dir` to keep
+and data in the per-user data directory (`app.db`). Set `EASYDBMS_HOME=/some/dir` to keep
 everything in one place (portable installs, experiments).
 
 ## What stage 2 does
@@ -59,12 +59,12 @@ everything in one place (portable installs, experiments).
 Two things are separate here and are reported separately: how fast the *engines* are (not ours to
 change) and how much the application *adds*.
 
-- **Native SIMD scanner** (`sql_erd_studio/core/simd/_native.c`). The statement splitter that decides what
+- **Native SIMD scanner** (`easydbms/core/simd/_native.c`). The statement splitter that decides what
   `Ctrl+Enter` runs is also on the path of every script run. A C extension does the same job over the raw
   string and skips string / comment / `$$` bodies with AVX2 (32 bytes per step) or SSE2 (16), chosen at
   run time with `__builtin_cpu_supports`; other CPUs use a scalar C loop. It is **optional**: it is built
   when a compiler is available, the pure-Python splitter is the reference and the fallback, and
-  `SQL_ERD_STUDIO_NO_SIMD=1` turns it off. The extension returns "not mine" for the few inputs it does not
+  `EASYDBMS_NO_SIMD=1` turns it off. The extension returns "not mine" for the few inputs it does not
   model exactly (a non-ASCII digit, a character whose `upper()` is ASCII) and Python takes over.
   Differential fuzzing (`tests/core/simd`: random scripts built from lexer-hostile fragments, raw random
   characters, every truncation of a tricky script, vector boundaries on 1/2/4-byte strings; three
@@ -98,7 +98,7 @@ database needs to run the query.
 ### ClickBench (1 M rows)
 
 `python -m benchmarks.clickbench.run` runs the 43 official queries (3 runs each) on 1 M rows (1 % of the
-dataset), default configuration of every engine, same machine (4 cores). Rows marked *SQL ERD Studio* go
+dataset), default configuration of every engine, same machine (4 cores). Rows marked *EasyDBMS* go
 through the application's own `DatabaseClient`; the others are the plain driver, DuckDB 1.5.6 and
 ClickHouse 26.9 (`chdb`, in-process). Stage 2 results (full per-query table in
 [`benchmarks/results/clickbench-stage-2.md`](benchmarks/results/clickbench-stage-2.md)):
@@ -107,9 +107,9 @@ ClickHouse 26.9 (`chdb`, in-process). Stage 2 results (full per-query table in
 |---|---:|---:|
 | DuckDB 1.5.6 | 1.11 | 0.8 s |
 | ClickHouse 26.9 (chdb) | 1.35 | 1.0 s |
-| PostgreSQL 16 — SQL ERD Studio / psycopg | 14.90 / 14.87 | 18.4 s / 18.4 s |
-| SQLite 3.45 — SQL ERD Studio / sqlite3 | 16.38 / 16.31 | 21.4 s / 21.4 s |
-| MariaDB 10.11 — SQL ERD Studio / PyMySQL | 78.03 / 78.22 | 79.5 s / 79.6 s |
+| PostgreSQL 16 — EasyDBMS / psycopg | 14.90 / 14.87 | 18.4 s / 18.4 s |
+| SQLite 3.45 — EasyDBMS / sqlite3 | 16.38 / 16.31 | 21.4 s / 21.4 s |
+| MariaDB 10.11 — EasyDBMS / PyMySQL | 78.03 / 78.22 | 79.5 s / 79.6 s |
 
 What it says, and what it does not:
 
@@ -117,7 +117,7 @@ What it says, and what it does not:
   measurement noise (+0.0 % PostgreSQL, −0.2 % MariaDB, +0.0 % SQLite, runs interleaved so neither warms
   the cache for the other). That is the part this project controls.
 - **Engine speed is the engine's**: DuckDB and ClickHouse, column stores built for this workload, finish the
-  suite in about 1 s against 18–80 s for the row stores. SQL ERD Studio does not make PostgreSQL, MariaDB or
+  suite in about 1 s against 18–80 s for the row stores. EasyDBMS does not make PostgreSQL, MariaDB or
   SQLite faster and does not claim to; it is a client for them, not an engine.
 - Caveats: 1 M rows rather than 100 M, untuned servers sharing the machine with the benchmark, page cache not
   dropped (first run is warm), a single machine. Absolute numbers are not comparable with the public
@@ -149,7 +149,7 @@ The benchmark is repeated at the end of every stage; see [`benchmarks/README.md`
 ## Layout
 
 ```
-sql_erd_studio/
+easydbms/
 ├─ core/                    # no Qt
 │  ├─ dialects/             # PostgreSQL / MySQL / SQLite: quoting, literals, lexer, splitter,
 │  │                        #   formatter, translator, vocabulary, type classification
@@ -187,7 +187,7 @@ Dependencies point one way: `ui → core/session → core/*`. Worker threads rea
 
 ## Dialect system
 
-`sql_erd_studio.core.dialects` is the single place that knows how the three dialects differ.
+`easydbms.core.dialects` is the single place that knows how the three dialects differ.
 Everything else asks a `Dialect` instead of branching on a database name:
 
 | Concern | API |
@@ -210,14 +210,14 @@ Everything else asks a `Dialect` instead of branching on a database name:
 ```bash
 ruff check . && ruff format --check . && mypy      # mypy runs in strict mode
 pytest                                             # SQLite always; Qt runs headless (offscreen)
-ERD_FUZZ_ITERATIONS=60000 pytest tests/core/simd   # longer native-vs-Python differential fuzz
+EASYDBMS_FUZZ_ITERATIONS=60000 pytest tests/core/simd   # longer native-vs-Python differential fuzz
 ```
 
 The suite is most valuable against real servers. Point it at empty throw-away databases:
 
 ```bash
-export ERD_TEST_POSTGRES_URL="postgresql+psycopg://user:pass@localhost/erd_test"
-export ERD_TEST_MYSQL_URL="mysql+pymysql://user:pass@localhost/erd_test"
+export EASYDBMS_TEST_POSTGRES_URL="postgresql+psycopg://user:pass@localhost/easydbms_test"
+export EASYDBMS_TEST_MYSQL_URL="mysql+pymysql://user:pass@localhost/easydbms_test"
 pytest
 ```
 

@@ -5,10 +5,10 @@ from pathlib import Path
 from PySide6.QtWidgets import QApplication
 from pytestqt.qtbot import QtBot
 
-from sql_erd_studio.app import build_window
-from sql_erd_studio.core.paths import AppPaths
-from sql_erd_studio.ui.i18n import current_language
-from sql_erd_studio.ui.theme import current_tokens
+from easydbms.app import build_window
+from easydbms.core.paths import AppPaths
+from easydbms.ui.i18n import current_language
+from easydbms.ui.theme import current_tokens
 
 
 def test_the_window_is_built_from_the_saved_settings(

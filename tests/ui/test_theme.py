@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 from PySide6.QtWidgets import QApplication
 
-from sql_erd_studio.core.connections import ConnectionColor
-from sql_erd_studio.ui.theme import (
+from easydbms.core.connections import ConnectionColor
+from easydbms.ui.theme import (
     COLOR_HEX,
     THEMES,
     apply_theme,
@@ -15,7 +15,7 @@ from sql_erd_studio.ui.theme import (
     color_hex,
     current_tokens,
 )
-from sql_erd_studio.ui.theme.assets import check_icon_path
+from easydbms.ui.theme.assets import check_icon_path
 
 
 @pytest.mark.parametrize("name", ["dark", "light"])

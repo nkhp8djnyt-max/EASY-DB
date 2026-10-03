@@ -4,9 +4,9 @@ import pytest
 from PySide6.QtWidgets import QPushButton
 from pytestqt.qtbot import QtBot
 
-from sql_erd_studio.core.db import ConnectionFailed, DatabaseFileError
-from sql_erd_studio.core.session import Session, SessionState
-from sql_erd_studio.ui.session_panel import SessionPanel
+from easydbms.core.db import ConnectionFailed, DatabaseFileError
+from easydbms.core.session import Session, SessionState
+from easydbms.ui.session_panel import SessionPanel
 
 from .conftest import Env, shown_texts
 

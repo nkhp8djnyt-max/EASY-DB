@@ -11,13 +11,13 @@ from typing import Any
 import pytest
 from PySide6.QtWidgets import QApplication, QFileDialog, QInputDialog, QLabel, QMessageBox, QWidget
 
-from sql_erd_studio.core.connections import FileConnection, MemorySecretStore, ServerConnection
-from sql_erd_studio.core.paths import AppPaths
-from sql_erd_studio.core.services import Services, build_services
-from sql_erd_studio.ui.i18n import set_language
-from sql_erd_studio.ui.runtime import BackgroundRunner, EventBridge
-from sql_erd_studio.ui.session_panel import SessionPanel
-from sql_erd_studio.ui.theme import apply_theme, current_tokens
+from easydbms.core.connections import FileConnection, MemorySecretStore, ServerConnection
+from easydbms.core.paths import AppPaths
+from easydbms.core.services import Services, build_services
+from easydbms.ui.i18n import set_language
+from easydbms.ui.runtime import BackgroundRunner, EventBridge
+from easydbms.ui.session_panel import SessionPanel
+from easydbms.ui.theme import apply_theme, current_tokens
 
 
 @dataclass

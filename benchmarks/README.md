@@ -5,7 +5,7 @@ Two things are measured, both reproducible from this directory:
 * `simd_micro.py` — the acceleration layer (native SIMD scanner, Arrow/NumPy sorting and filtering)
   against its pure Python reference.
 * `clickbench/` — the 43 [ClickBench](https://github.com/ClickHouse/ClickBench) queries through
-  **SQL ERD Studio's database clients**, next to the same drivers used directly, and to DuckDB and
+  **EasyDBMS's database clients**, next to the same drivers used directly, and to DuckDB and
   ClickHouse as analytical reference points. Reports are written to `benchmarks/results/`.
 
 ## ClickBench

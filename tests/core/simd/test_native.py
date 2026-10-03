@@ -10,13 +10,13 @@ from collections.abc import Iterator
 
 import pytest
 
-from sql_erd_studio.core import simd
-from sql_erd_studio.core.dialects import Dialect, all_dialects
-from sql_erd_studio.core.dialects import splitter as splitter_module
+from easydbms.core import simd
+from easydbms.core.dialects import Dialect, all_dialects
+from easydbms.core.dialects import splitter as splitter_module
 
 pytestmark = pytest.mark.skipif(not simd.available(), reason="native extension not built")
 
-ITERATIONS = int(os.environ.get("ERD_FUZZ_ITERATIONS", "3000"))
+ITERATIONS = int(os.environ.get("EASYDBMS_FUZZ_ITERATIONS", "3000"))
 
 # Fragments that exercise every lexer branch; random glue between them makes odd boundaries.
 FRAGMENTS = [
@@ -271,8 +271,8 @@ def test_flags_for_unsupported_spec_declines() -> None:
 
 
 def test_disabled_by_environment() -> None:
-    code = "from sql_erd_studio.core import simd; print(simd.available(), simd.implementation())"
-    env = {**os.environ, "SQL_ERD_STUDIO_NO_SIMD": "1"}
+    code = "from easydbms.core import simd; print(simd.available(), simd.implementation())"
+    env = {**os.environ, "EASYDBMS_NO_SIMD": "1"}
     out = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True)
     assert out.stdout.split() == ["False", "python"], out.stderr
 

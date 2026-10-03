@@ -2,7 +2,8 @@
 
 These are the tests that matter most: quoting, literals, null-safe comparison, pagination,
 read-only sessions, script splitting and translation are all checked by letting the database
-execute the result. They need ERD_TEST_POSTGRES_URL / ERD_TEST_MYSQL_URL for the server engines.
+execute the result. They need EASYDBMS_TEST_POSTGRES_URL / EASYDBMS_TEST_MYSQL_URL for the server
+engines.
 
 SQL that contains user-style text (``%``, quotes, ...) is sent through the raw DBAPI cursor with no
 parameters: psycopg and PyMySQL interpret ``%`` as a placeholder as soon as a parameter container,
@@ -24,7 +25,7 @@ import pymysql
 import pytest
 from sqlalchemy import Connection, text
 
-from sql_erd_studio.core.dialects import (
+from easydbms.core.dialects import (
     MYSQL,
     POSTGRESQL,
     SQLITE,

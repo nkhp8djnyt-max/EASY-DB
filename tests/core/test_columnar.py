@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from sql_erd_studio.core.columnar import ColumnStore
+from easydbms.core.columnar import ColumnStore
 
 
 def store(*rows: tuple[object, ...]) -> ColumnStore:

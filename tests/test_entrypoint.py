@@ -13,7 +13,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 QApplication.exec = lambda self=None: 0   # build and show everything, but do not block
 # a modal warning would wait for a click: report it instead
 QMessageBox.warning = staticmethod(lambda parent, title, text, *a, **k: print("NOTICE:", text))
-from sql_erd_studio.app import main
+from easydbms.app import main
 sys.exit(main([]))
 """
 
@@ -22,7 +22,7 @@ def run_app(home: Path, *extra_env: tuple[str, str]) -> subprocess.CompletedProc
     env = {
         **os.environ,
         "QT_QPA_PLATFORM": "offscreen",
-        "SQL_ERD_STUDIO_HOME": str(home),
+        "EASYDBMS_HOME": str(home),
         **dict(extra_env),
     }
     return subprocess.run(

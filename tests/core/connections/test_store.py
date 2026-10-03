@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from sql_erd_studio.core.connections import (
+from easydbms.core.connections import (
     ConnectionNotFoundError,
     ConnectionStore,
     FileConnection,

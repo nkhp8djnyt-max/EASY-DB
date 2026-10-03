@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from sql_erd_studio.core.connections import (
+from easydbms.core.connections import (
     ConnectionUrlError,
     FileConnection,
     ServerConnection,

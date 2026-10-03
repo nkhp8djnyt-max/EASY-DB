@@ -3,13 +3,13 @@ from __future__ import annotations
 import pytest
 from pytestqt.qtbot import QtBot
 
-from sql_erd_studio.core.connections import (
+from easydbms.core.connections import (
     ConnectionColor,
     FileConnection,
     ServerConnection,
 )
-from sql_erd_studio.core.dialects import DialectId
-from sql_erd_studio.ui.connection_form import ConnectionForm, FormError
+from easydbms.core.dialects import DialectId
+from easydbms.ui.connection_form import ConnectionForm, FormError
 
 from .conftest import Prompts
 

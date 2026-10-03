@@ -8,9 +8,9 @@ from pathlib import Path
 
 import platformdirs
 
-APP_NAME = "sql-erd-studio"
+APP_NAME = "easydbms"
 #: Point this at a directory to keep config and data together (portable installs, tests).
-HOME_ENV = "SQL_ERD_STUDIO_HOME"
+HOME_ENV = "EASYDBMS_HOME"
 
 
 @dataclass(frozen=True, slots=True)

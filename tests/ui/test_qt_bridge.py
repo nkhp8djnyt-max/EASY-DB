@@ -6,8 +6,8 @@ from typing import Any
 
 from pytestqt.qtbot import QtBot
 
-from sql_erd_studio.core.session import ActiveChanged
-from sql_erd_studio.ui.runtime import BackgroundRunner, EventBridge
+from easydbms.core.session import ActiveChanged
+from easydbms.ui.runtime import BackgroundRunner, EventBridge
 
 
 def test_results_are_delivered_on_the_gui_thread(qtbot: QtBot) -> None:

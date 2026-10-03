@@ -71,7 +71,7 @@ class MySqlClient(DatabaseClient):
         kwargs: dict[str, Any] = {
             "charset": "utf8mb4",
             "connect_timeout": int(DEFAULT_TIMEOUT),
-            "program_name": "SQL ERD Studio",
+            "program_name": "EasyDBMS",
         }
         if config.host.startswith("/"):
             kwargs["unix_socket"] = config.host

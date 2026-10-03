@@ -5,9 +5,9 @@ from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QKeyEvent, QTextCursor
 from pytestqt.qtbot import QtBot
 
-from sql_erd_studio.core.dialects import MYSQL, POSTGRESQL, SQLITE, Dialect
-from sql_erd_studio.ui.editor import SqlEditor
-from sql_erd_studio.ui.theme import current_syntax
+from easydbms.core.dialects import MYSQL, POSTGRESQL, SQLITE, Dialect
+from easydbms.ui.editor import SqlEditor
+from easydbms.ui.theme import current_syntax
 
 
 @pytest.fixture

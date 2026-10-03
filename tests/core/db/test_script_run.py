@@ -7,10 +7,10 @@ import time
 
 import pytest
 
-from sql_erd_studio.core.db import DatabaseClient
-from sql_erd_studio.core.dialects import split_statements
-from sql_erd_studio.core.queries import Outcome, ScriptRun, StatementOutcome
-from sql_erd_studio.core.session import Session
+from easydbms.core.db import DatabaseClient
+from easydbms.core.dialects import split_statements
+from easydbms.core.queries import Outcome, ScriptRun, StatementOutcome
+from easydbms.core.session import Session
 
 from .conftest import Target
 from .test_clients import SLOW_QUERY
@@ -104,7 +104,7 @@ def test_a_session_runs_scripts_on_its_own_lane_in_order(target: Target) -> None
 
 
 def test_running_without_a_connection_is_an_error(target: Target) -> None:
-    from sql_erd_studio.core.db import NotConnectedError
+    from easydbms.core.db import NotConnectedError
 
     session = Session(target.config)
     with pytest.raises(NotConnectedError):

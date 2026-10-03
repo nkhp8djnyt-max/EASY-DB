@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from sql_erd_studio.core.storage import (
+from easydbms.core.storage import (
     MIGRATIONS,
     AppDatabase,
     DatabaseTooNewError,

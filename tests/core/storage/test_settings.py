@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from sql_erd_studio.core.storage import AppSettings, SettingsStore
+from easydbms.core.storage import AppSettings, SettingsStore
 
 
 def test_defaults_when_there_is_no_file(tmp_path: Path) -> None:

@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from sql_erd_studio.core.queries import QueryTabStore, TabState
-from sql_erd_studio.core.storage import AppDatabase
+from easydbms.core.queries import QueryTabStore, TabState
+from easydbms.core.storage import AppDatabase
 
 
 @pytest.fixture

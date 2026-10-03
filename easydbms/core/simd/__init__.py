@@ -5,7 +5,7 @@ is not an error). It provides a statement splitter that skips string, comment an
 with AVX2 / SSE2 byte scans selected at run time. Everything falls back to the pure Python
 implementation, which stays the reference: ``tests/core/simd`` fuzzes the two against each other.
 
-Set ``SQL_ERD_STUDIO_NO_SIMD=1`` to ignore the extension altogether.
+Set ``EASYDBMS_NO_SIMD=1`` to ignore the extension altogether.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from ..dialects.base import LexerSpec
 
 _native: ModuleType | None
-if os.environ.get("SQL_ERD_STUDIO_NO_SIMD"):
+if os.environ.get("EASYDBMS_NO_SIMD"):
     _native = None
 else:
     try:

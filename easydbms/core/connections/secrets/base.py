@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-SERVICE_NAME = "sql-erd-studio"
+SERVICE_NAME = "easydbms"
 PASSWORD = "password"
 
 

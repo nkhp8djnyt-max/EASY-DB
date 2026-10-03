@@ -1,7 +1,8 @@
 """Fixtures that run a test against every supported engine.
 
-SQLite always runs. PostgreSQL and MySQL/MariaDB run when ``ERD_TEST_POSTGRES_URL`` /
-``ERD_TEST_MYSQL_URL`` point at an empty throw-away database, otherwise those cases are skipped.
+SQLite always runs. PostgreSQL and MySQL/MariaDB run when ``EASYDBMS_TEST_POSTGRES_URL`` /
+``EASYDBMS_TEST_MYSQL_URL`` point at an empty throw-away database, otherwise those cases are
+skipped.
 """
 
 from __future__ import annotations
@@ -15,11 +16,11 @@ from pathlib import Path
 import pytest
 from sqlalchemy import Engine, create_engine
 
-from sql_erd_studio.core.dialects import MYSQL, POSTGRESQL, SQLITE, Dialect
+from easydbms.core.dialects import MYSQL, POSTGRESQL, SQLITE, Dialect
 
 _ENV_URLS = {
-    "postgresql": "ERD_TEST_POSTGRES_URL",
-    "mysql": "ERD_TEST_MYSQL_URL",
+    "postgresql": "EASYDBMS_TEST_POSTGRES_URL",
+    "mysql": "EASYDBMS_TEST_MYSQL_URL",
 }
 
 

@@ -4,7 +4,7 @@ import random
 
 import pytest
 
-from sql_erd_studio.core.dialects import (
+from easydbms.core.dialects import (
     MYSQL,
     POSTGRESQL,
     SQLITE,

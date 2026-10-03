@@ -9,8 +9,8 @@ from typing import Any
 
 import pytest
 
-from sql_erd_studio.core.connections import FileConnection, ServerConnection, replace
-from sql_erd_studio.core.db import (
+from easydbms.core.connections import FileConnection, ServerConnection, replace
+from easydbms.core.db import (
     AuthFailed,
     ConnectionFailed,
     ConnectTimeout,
@@ -22,7 +22,7 @@ from sql_erd_studio.core.db import (
     SslError,
     create_client,
 )
-from sql_erd_studio.core.db.diagnostics import network_steps
+from easydbms.core.db.diagnostics import network_steps
 
 from .conftest import UNSET, Target, Unset
 

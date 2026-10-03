@@ -9,10 +9,10 @@ from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QLabel, QWidget
 from pytestqt.qtbot import QtBot
 
-from sql_erd_studio.core.db import QueryError, QueryResult
-from sql_erd_studio.core.dialects import Statement
-from sql_erd_studio.core.queries import Outcome, StatementOutcome
-from sql_erd_studio.ui.results import ResultGrid, ResultsPanel, ResultTableModel, format_cell
+from easydbms.core.db import QueryError, QueryResult
+from easydbms.core.dialects import Statement
+from easydbms.core.queries import Outcome, StatementOutcome
+from easydbms.ui.results import ResultGrid, ResultsPanel, ResultTableModel, format_cell
 
 
 def result(

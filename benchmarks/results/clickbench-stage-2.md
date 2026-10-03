@@ -9,17 +9,17 @@ Dataset: `hits_0.parquet`, **1,000,000 rows** (1/100 of the full ClickBench data
 | DuckDB | 1.5.6 | 1.11 | 0.8 s | 1.0 s | 0 |
 | ClickHouse (chdb) | 26.9.2.1 | 1.35 | 1.0 s | 1.4 s | 0 |
 | PostgreSQL (psycopg) | 16.14 | 14.87 | 18.4 s | 18.8 s | 0 |
-| PostgreSQL (SQL ERD Studio) | 16.14 | 14.90 | 18.4 s | 19.4 s | 0 |
+| PostgreSQL (EasyDBMS) | 16.14 | 14.90 | 18.4 s | 19.4 s | 0 |
 | SQLite (sqlite3) | 3.45.1 | 16.31 | 21.4 s | 22.3 s | 0 |
-| SQLite (SQL ERD Studio) | 3.45.1 | 16.38 | 21.4 s | 22.5 s | 0 |
-| MariaDB (SQL ERD Studio) | 10.11.14-MariaDB | 78.03 | 79.5 s | 82.0 s | 0 |
+| SQLite (EasyDBMS) | 3.45.1 | 16.38 | 21.4 s | 22.5 s | 0 |
+| MariaDB (EasyDBMS) | 10.11.14-MariaDB | 78.03 | 79.5 s | 82.0 s | 0 |
 | MariaDB (PyMySQL) | 10.11.14-MariaDB | 78.22 | 79.6 s | 82.0 s | 0 |
 
 Relative score = geometric mean over the queries of `(t + 10 ms) / (fastest runner's t + 10 ms)`, the ClickBench formula; a failed query counts as twice the slowest successful time of that query. Sums skip failed queries, so compare them only between rows with the same *Failed* count.
 
 ## Per query, best of runs (ms)
 
-| # | PostgreSQL (SQL ERD Studio) | PostgreSQL (psycopg) | MariaDB (SQL ERD Studio) | MariaDB (PyMySQL) | SQLite (SQL ERD Studio) | SQLite (sqlite3) | DuckDB | ClickHouse (chdb) |
+| # | PostgreSQL (EasyDBMS) | PostgreSQL (psycopg) | MariaDB (EasyDBMS) | MariaDB (PyMySQL) | SQLite (EasyDBMS) | SQLite (sqlite3) | DuckDB | ClickHouse (chdb) |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | 1 | 95 | 82 | 880 | 928 | 24 | 24 | **0.7** | 1.5 |
 | 2 | 136 | 138 | 985 | 966 | 281 | 268 | **1.2** | 1.7 |
@@ -75,7 +75,7 @@ Relative score = geometric mean over the queries of `(t + 10 ms) / (fastest runn
 
 ## Row-count differences between engines
 
-- query 29: PostgreSQL (SQL ERD Studio) 2, PostgreSQL (psycopg) 2, MariaDB (SQL ERD Studio) 1, MariaDB (PyMySQL) 1, SQLite (SQL ERD Studio) 2, SQLite (sqlite3) 2, DuckDB 2, ClickHouse (chdb) 2
-- query 43: PostgreSQL (SQL ERD Studio) 10, PostgreSQL (psycopg) 10, MariaDB (SQL ERD Studio) 0, MariaDB (PyMySQL) 0, SQLite (SQL ERD Studio) 0, SQLite (sqlite3) 0, DuckDB 10, ClickHouse (chdb) 10
+- query 29: PostgreSQL (EasyDBMS) 2, PostgreSQL (psycopg) 2, MariaDB (EasyDBMS) 1, MariaDB (PyMySQL) 1, SQLite (EasyDBMS) 2, SQLite (sqlite3) 2, DuckDB 2, ClickHouse (chdb) 2
+- query 43: PostgreSQL (EasyDBMS) 10, PostgreSQL (psycopg) 10, MariaDB (EasyDBMS) 0, MariaDB (PyMySQL) 0, SQLite (EasyDBMS) 0, SQLite (sqlite3) 0, DuckDB 10, ClickHouse (chdb) 10
 
 Each engine runs its own official ClickBench query text, which is not always the same statement (e.g. query 43 truncates time to the minute on PostgreSQL, DuckDB and ClickHouse, to the hour on MariaDB and to the minute of the hour on SQLite). A difference with identical SQL is only noted here, not investigated.

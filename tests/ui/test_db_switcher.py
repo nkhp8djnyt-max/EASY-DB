@@ -3,7 +3,7 @@ from __future__ import annotations
 from PySide6.QtGui import QAction
 from pytestqt.qtbot import QtBot
 
-from sql_erd_studio.ui.db_switcher import DbSwitcher
+from easydbms.ui.db_switcher import DbSwitcher
 
 from .conftest import Env
 

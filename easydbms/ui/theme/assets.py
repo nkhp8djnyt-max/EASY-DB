@@ -14,7 +14,7 @@ _SIZE = 32
 
 def check_icon_path(color: str) -> str:
     """Path (forward slashes, as QSS wants) of a check-mark PNG in ``color``; created if missing."""
-    directory = Path(tempfile.gettempdir()) / f"sql-erd-studio-{getpass.getuser()}"
+    directory = Path(tempfile.gettempdir()) / f"easydbms-{getpass.getuser()}"
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / f"check-{color.lstrip('#')}.png"
     if not path.exists():
@@ -34,7 +34,7 @@ def check_icon_path(color: str) -> str:
 
 def close_icon_path(color: str) -> str:
     """Path of a small "x" PNG in ``color`` (tab close buttons); created if missing."""
-    directory = Path(tempfile.gettempdir()) / f"sql-erd-studio-{getpass.getuser()}"
+    directory = Path(tempfile.gettempdir()) / f"easydbms-{getpass.getuser()}"
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / f"close-{color.lstrip('#')}.png"
     if not path.exists():

@@ -5,10 +5,10 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox
 from pytestqt.qtbot import QtBot
 
-from sql_erd_studio.core.connections import FileConnection
-from sql_erd_studio.core.dialects import MYSQL, SQLITE, DialectId
-from sql_erd_studio.core.queries import TabState
-from sql_erd_studio.ui.workspace import QueryWorkspace
+from easydbms.core.connections import FileConnection
+from easydbms.core.dialects import MYSQL, SQLITE, DialectId
+from easydbms.core.queries import TabState
+from easydbms.ui.workspace import QueryWorkspace
 
 from .conftest import Env, Prompts
 

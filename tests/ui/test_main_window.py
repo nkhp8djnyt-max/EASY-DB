@@ -7,15 +7,15 @@ import pytest
 from PySide6.QtGui import QAction
 from pytestqt.qtbot import QtBot
 
-from sql_erd_studio.core.connections import VaultSecretStore
-from sql_erd_studio.core.paths import AppPaths
-from sql_erd_studio.core.services import build_services
-from sql_erd_studio.core.session import SessionState
-from sql_erd_studio.core.storage import SettingsStore
-from sql_erd_studio.ui.connection_dialog import ConnectionDialog
-from sql_erd_studio.ui.main_window import MainWindow
-from sql_erd_studio.ui.runtime import BackgroundRunner, EventBridge
-from sql_erd_studio.ui.theme import current_tokens
+from easydbms.core.connections import VaultSecretStore
+from easydbms.core.paths import AppPaths
+from easydbms.core.services import build_services
+from easydbms.core.session import SessionState
+from easydbms.core.storage import SettingsStore
+from easydbms.ui.connection_dialog import ConnectionDialog
+from easydbms.ui.main_window import MainWindow
+from easydbms.ui.runtime import BackgroundRunner, EventBridge
+from easydbms.ui.theme import current_tokens
 
 from .conftest import Env, Prompts, shown_texts
 
@@ -40,7 +40,7 @@ def panel_text(window: MainWindow) -> str:
 
 def test_a_fresh_window_is_empty(env: Env, qtbot: QtBot) -> None:
     window = make_window(env, qtbot)
-    assert window.windowTitle() == "SQL ERD Studio"
+    assert window.windowTitle() == "EasyDBMS"
     assert "No connection" in window._status_label.text()
     assert "No connection selected" in panel_text(window)
     assert "Select a connection" in window.switcher.text()
@@ -70,7 +70,7 @@ def test_activating_a_connection_connects_in_the_background_and_updates_everythi
     window.activate(config.id)
     wait_for_state(env, qtbot, config.id, SessionState.READY)
     qtbot.waitUntil(lambda: "Connected to Shop" in window._status_label.text(), timeout=5000)
-    assert window.windowTitle() == "Shop — SQL ERD Studio"
+    assert window.windowTitle() == "Shop — EasyDBMS"
     assert window.switcher.text().startswith("Shop")
     assert "SQLite" in panel_text(window)
 

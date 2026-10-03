@@ -46,7 +46,7 @@ class PostgresClient(DatabaseClient):
             "host": config.host,
             "port": config.effective_port,
             "connect_timeout": int(DEFAULT_TIMEOUT),
-            "application_name": "SQL ERD Studio",
+            "application_name": "EasyDBMS",
         }
         if config.user:
             kwargs["user"] = config.user

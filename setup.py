@@ -7,8 +7,8 @@ from setuptools import Extension, setup
 setup(
     ext_modules=[
         Extension(
-            "sql_erd_studio.core.simd._native",
-            sources=["sql_erd_studio/core/simd/_native.c"],
+            "easydbms.core.simd._native",
+            sources=["easydbms/core/simd/_native.c"],
             extra_compile_args=["/O2"] if sys.platform == "win32" else ["-O3"],
             optional=True,
         )

@@ -7,13 +7,13 @@ import pytest
 from PySide6.QtWidgets import QMessageBox
 from pytestqt.qtbot import QtBot
 
-from sql_erd_studio.core.connections import (
+from easydbms.core.connections import (
     ServerConnection,
     VaultSecretStore,
     parse_connection_url,
 )
-from sql_erd_studio.core.session import SessionState
-from sql_erd_studio.ui.connection_dialog import ConnectionDialog
+from easydbms.core.session import SessionState
+from easydbms.ui.connection_dialog import ConnectionDialog
 
 from .conftest import Env, Prompts
 
@@ -400,9 +400,9 @@ def test_declining_to_unlock_aborts_the_save_with_a_message(
 
 @pytest.mark.integration
 def test_testing_a_real_server_end_to_end(env: Env, qtbot: QtBot) -> None:
-    url = os.environ.get("ERD_TEST_POSTGRES_URL")
+    url = os.environ.get("EASYDBMS_TEST_POSTGRES_URL")
     if not url:
-        pytest.skip("set ERD_TEST_POSTGRES_URL to run against PostgreSQL")
+        pytest.skip("set EASYDBMS_TEST_POSTGRES_URL to run against PostgreSQL")
     parsed = parse_connection_url(url, name="live")
     env.services.store.save(parsed.config)
     env.secrets.set(parsed.config.id, parsed.password or "")

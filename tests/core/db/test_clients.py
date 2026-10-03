@@ -9,8 +9,8 @@ from typing import Any
 
 import pytest
 
-from sql_erd_studio.core.connections import FileConnection, ServerConnection, replace
-from sql_erd_studio.core.db import (
+from easydbms.core.connections import FileConnection, ServerConnection, replace
+from easydbms.core.db import (
     ConnectionLost,
     NotConnectedError,
     QueryCancelled,
@@ -358,7 +358,7 @@ def test_postgresql_options_and_application_name(target: Target) -> None:
         pytest.skip("PostgreSQL only")
     assert isinstance(target.config, ServerConnection)
     with target.client() as client:
-        assert client.execute("SHOW application_name").rows == (("SQL ERD Studio",),)
+        assert client.execute("SHOW application_name").rows == (("EasyDBMS",),)
     named = replace(target.config, options={"application_name": "custom"})
     with target.client(named) as client:
         assert client.execute("SHOW application_name").rows == (("custom",),)

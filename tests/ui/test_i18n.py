@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-import sql_erd_studio.ui as ui_package
-from sql_erd_studio.ui.catalog_ru import RU
-from sql_erd_studio.ui.i18n import current_language, resolve_language, set_language, tr
+import easydbms.ui as ui_package
+from easydbms.ui.catalog_ru import RU
+from easydbms.ui.i18n import current_language, resolve_language, set_language, tr
 
 UI_DIR = Path(ui_package.__file__).parent
 PLACEHOLDER = re.compile(r"\{(\w+)\}")

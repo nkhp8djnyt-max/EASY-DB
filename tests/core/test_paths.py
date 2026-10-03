@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sql_erd_studio.core.paths import HOME_ENV, AppPaths
+from easydbms.core.paths import HOME_ENV, AppPaths
 
 
 def test_home_override_keeps_everything_under_one_directory(tmp_path: Path) -> None:
@@ -17,8 +17,8 @@ def test_home_override_keeps_everything_under_one_directory(tmp_path: Path) -> N
 
 def test_default_locations_are_per_user_directories() -> None:
     paths = AppPaths.default({})
-    assert "sql-erd-studio" in str(paths.config_dir)
-    assert "sql-erd-studio" in str(paths.data_dir)
+    assert "easydbms" in str(paths.config_dir)
+    assert "easydbms" in str(paths.data_dir)
     assert paths.config_dir != paths.data_dir
 
 

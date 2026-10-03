@@ -35,7 +35,7 @@ from .session_panel import SessionPanel
 from .theme import apply_theme, current_tokens
 from .workspace import QueryWorkspace
 
-APP_TITLE = "SQL ERD Studio"
+APP_TITLE = "EasyDBMS"
 _GEOMETRY_KEY = "window/geometry"
 _SPLITTER_KEY = "window/splitter"
 

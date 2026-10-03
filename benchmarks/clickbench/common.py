@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 DATA_DIR = Path(
-    os.environ.get("CLICKBENCH_DIR", Path.home() / ".cache" / "sql-erd-studio" / "clickbench")
+    os.environ.get("CLICKBENCH_DIR", Path.home() / ".cache" / "easydbms" / "clickbench")
 )
 PARQUET = DATA_DIR / "hits_0.parquet"
 CSV = Path(

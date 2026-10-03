@@ -5,7 +5,7 @@ from __future__ import annotations
 import pymysql
 import pytest
 
-from sql_erd_studio.core.dialects import MYSQL, POSTGRESQL, SQLITE, TypeKind
+from easydbms.core.dialects import MYSQL, POSTGRESQL, SQLITE, TypeKind
 
 from .conftest import EngineCase
 from .test_engines import DB_ERRORS, run

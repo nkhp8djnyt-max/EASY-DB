@@ -8,10 +8,10 @@ from typing import Any
 
 import pytest
 
-from sql_erd_studio.core.connections import FileConnection, ServerConnection
-from sql_erd_studio.core.db import ConnectionFailed, DatabaseClient, DbError, QueryError
-from sql_erd_studio.core.db.base import RawResult
-from sql_erd_studio.core.session import ManagerEvent, Session, SessionState
+from easydbms.core.connections import FileConnection, ServerConnection
+from easydbms.core.db import ConnectionFailed, DatabaseClient, DbError, QueryError
+from easydbms.core.db.base import RawResult
+from easydbms.core.session import ManagerEvent, Session, SessionState
 
 
 class ScriptedClient(DatabaseClient):

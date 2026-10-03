@@ -6,7 +6,7 @@ from uuid import UUID
 
 import pytest
 
-from sql_erd_studio.core.dialects import MYSQL, POSTGRESQL, SQLITE, Dialect, all_dialects
+from easydbms.core.dialects import MYSQL, POSTGRESQL, SQLITE, Dialect, all_dialects
 
 
 @pytest.mark.parametrize("dialect", all_dialects(), ids=lambda d: d.id.value)

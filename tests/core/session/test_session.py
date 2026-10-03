@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from sql_erd_studio.core.db import ConnectionFailed, DatabaseFileError
-from sql_erd_studio.core.session import Session, SessionState
+from easydbms.core.db import ConnectionFailed, DatabaseFileError
+from easydbms.core.session import Session, SessionState
 
 from .conftest import Events, ScriptedClient, file_config, server_config, sqlite_file, state_of
 
