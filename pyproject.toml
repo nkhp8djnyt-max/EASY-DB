@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sql-erd-studio"
+version = "0.1.0"
+description = "SQL ERD Studio: desktop database client with ERD, editable results and dialect-aware SQL tooling."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "sqlglot>=30,<31",
+]
+
+[project.optional-dependencies]
+# Database drivers for the three supported dialects (SQLite ships with Python).
+drivers = [
+    "SQLAlchemy>=2.0",
+    "psycopg[binary]>=3.2",
+    "PyMySQL>=1.1",
+]
+dev = [
+    "SQLAlchemy>=2.0",
+    "psycopg[binary]>=3.2",
+    "PyMySQL>=1.1",
+    "pytest>=8",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "types-PyMySQL",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["sql_erd_studio"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: needs a live database; PostgreSQL/MySQL are enabled via ERD_TEST_POSTGRES_URL / ERD_TEST_MYSQL_URL",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "RUF", "PT"]
+# Keyword tables are written as wrapped words + .split() on purpose.
+ignore = ["SIM905"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["sql_erd_studio", "tests"]
