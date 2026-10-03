@@ -1,561 +1,217 @@
 # EasyDBMS
 
-Desktop database client in Python: SQL editor, ERD, editable result grid. Supported SQL
-dialects: **PostgreSQL**, **MySQL** (including MariaDB) and **SQLite**. Corporate dialects
-(SQL Server, Oracle) are intentionally out of scope.
+**English** · [Українська](README.uk.md)
 
-**Status: stage 7 of 7 — the full set.** Everything from the earlier stages (connections with SSL / SSH / `~/.pgpass`,
-SQL editor with autocomplete, ER diagram, editable grid) plus: a **history of every statement you ran** and
-**saved queries** in folders, **diagram export** (PNG / SVG / PDF, and Mermaid / DBML text), **cloud providers**
-(AWS RDS / Aurora IAM, Google Cloud SQL IAM, Azure Entra ID, templates for Supabase, Neon, PlanetScale and
-CockroachDB Cloud), a **follow-the-system theme** and a **PyInstaller build** with a CI workflow.
+A desktop database client for **PostgreSQL**, **MySQL / MariaDB** and **SQLite**. Write SQL with smart
+autocomplete, see your database as an ER diagram, edit table data in a grid and review every change before it is
+written. Works on Windows, macOS and Linux, in English and Ukrainian, with a dark and a light theme.
 
-| History of what you ran | Saved queries in folders | A hosted service fills the form |
+| ER diagram and SQL editor | Review edits before they are written | Connection settings |
 |---|---|---|
-| ![](docs/screenshots/stage7-history.png) | ![](docs/screenshots/stage7-saved.png) | ![](docs/screenshots/stage7-cloud.png) |
+| ![The editor, results and the diagram](docs/screenshots/stage3-diagram.png) | ![Pending edits in the grid](docs/screenshots/stage5-pending.png) | ![TLS settings](docs/screenshots/stage6-ssl.png) |
 
-The diagram, exported as a PNG by *Database → Export diagram…* (`Ctrl+E`): [stage7-erd-export.png](docs/screenshots/stage7-erd-export.png).
+## What you can do
 
-| TLS: modes and certificate files | SSH tunnel with a jump host | A test through the tunnel |
+- **Connect to your databases.** Save as many connections as you like, group them, give them a colour label and
+  switch between them from one menu. Passwords are kept in your system keyring (or an encrypted vault), never in a
+  settings file. *Test* shows exactly which step fails: DNS, port, sign-in, TLS or the query.
+- **Connect securely.** SSL/TLS with CA and client certificates, an SSH tunnel (password, key or ssh-agent, with a jump
+  host), `~/.pgpass` and `pg_service.conf`, `${ENV_VAR}` placeholders, and short-lived tokens for AWS RDS, Google
+  Cloud SQL and Azure. Templates for Supabase, Neon, PlanetScale and CockroachDB Cloud.
+- **Write SQL faster.** Tabs that survive a restart, syntax highlighting for your dialect, autocomplete for tables,
+  columns, aliases and joins, snippets, one-key formatting, several statements per script with a result tab for each,
+  cancel at any time.
+- **See the structure.** An ER diagram with primary and foreign keys, 1:1, 1:N and N:M relations, search, zoom and
+  schema selection. Export it as PNG, SVG, PDF, Mermaid or DBML.
+- **Edit data safely.** Change cells, add and delete rows right in the grid. Nothing is written until you press
+  <kbd>Alt+S</kbd>: you see the generated SQL, everything runs in one transaction, and a row changed by somebody else
+  in the meantime stops the whole batch instead of being overwritten.
+- **Keep your work.** Every statement you run is kept in a searchable history; save the ones you reuse into folders.
+- **Stay safe in production.** Production connections get a red banner and ask before they change data; dangerous
+  statements (`DROP`, `TRUNCATE`, `DELETE` or `UPDATE` without a condition) ask first; a connection can be read-only.
+
+## Supported databases
+
+| Database | Versions tested | Notes |
 |---|---|---|
-| ![](docs/screenshots/stage6-ssl.png) | ![](docs/screenshots/stage6-ssh.png) | ![](docs/screenshots/stage6-tunnel-test.png) |
+| PostgreSQL | 16 | Schemas, TLS, SSH, `~/.pgpass`, `pg_service.conf`, IAM tokens |
+| MySQL / MariaDB | MariaDB 10.11 | TLS, SSH, IAM tokens |
+| SQLite | 3.x | A file on disk or `:memory:` |
 
-More: [an SSH server nobody trusted yet — fingerprint and a *Trust this server…* button](docs/screenshots/stage6-trust.png),
-[light theme, Ukrainian UI](docs/screenshots/stage6-ssh-light-uk.png).
+SQL Server, Oracle and ClickHouse are not supported.
 
-| Pending changes | Review before writing | Someone else changed the row |
-|---|---|---|
-| ![](docs/screenshots/stage5-pending.png) | ![](docs/screenshots/stage5-review.png) | ![](docs/screenshots/stage5-conflict.png) |
+## Install and run
 
-More: [a join result is read-only, and says why](docs/screenshots/stage5-readonly.png),
-[light theme, Ukrainian UI](docs/screenshots/stage5-pending-light-uk.png).
-
-| Tables after `FROM` | Columns of an alias | Join condition from the foreign key |
-|---|---|---|
-| ![](docs/screenshots/stage4-tables.png) | ![](docs/screenshots/stage4-columns.png) | ![](docs/screenshots/stage4-join.png) |
-
-More: [snippets and keywords](docs/screenshots/stage4-snippets.png),
-[expand `*`](docs/screenshots/stage4-star.png),
-[light theme, Ukrainian UI](docs/screenshots/stage4-light-uk.png).
-
-| The diagram | Select a table | Table data |
-|---|---|---|
-| ![](docs/screenshots/stage3-diagram.png) | ![](docs/screenshots/stage3-highlight.png) | ![](docs/screenshots/stage3-table-tab.png) |
-
-More: [all schemas, wide table collapsed](docs/screenshots/stage3-all-schemas.png),
-[light theme](docs/screenshots/stage3-diagram-light.png).
-
-| Run a query | Script with an error | Formatted |
-|---|---|---|
-| ![](docs/screenshots/stage2-results.png) | ![](docs/screenshots/stage2-script-error.png) | ![](docs/screenshots/stage2-formatted.png) |
-
-| Test a connection | Failure explained | Connected |
-|---|---|---|
-| ![](docs/screenshots/connections-dialog-test-ok.png) | ![](docs/screenshots/connections-dialog-test-failed.png) | ![](docs/screenshots/main-connected.png) |
-
-More: [SQLite file](docs/screenshots/connections-dialog-sqlite.png),
-[production banner](docs/screenshots/main-production.png),
-[connection error](docs/screenshots/main-error.png),
-[light theme](docs/screenshots/connections-dialog-light.png).
-
-## Run
+You need **Python 3.12 or newer**. The quick path, in a terminal:
 
 ```bash
-uv venv --python 3.12 && . .venv/bin/activate
-uv pip install -e ".[dev]"        # builds the optional C extension if a compiler is present
-python -m easydbms          # or: easydbms
+git clone https://github.com/nkhp8djnyt-max/easy-db.git
+cd easy-db
+python -m venv .venv
+. .venv/bin/activate              # Windows (PowerShell): .venv\Scripts\Activate.ps1
+pip install -e ".[gui]"
+python -m easydbms
 ```
 
-Without a C compiler everything still works (pure-Python fallback); `python -c "from easydbms.core
-import simd; print(simd.status())"` shows what is active.
+On Linux, Qt needs a few system libraries; if the window does not open, install them first:
 
-Config lives in the per-user config directory (`connections.json`, `settings.toml`, `vault.json`)
-and data in the per-user data directory (`app.db`). Set `EASYDBMS_HOME=/some/dir` to keep
-everything in one place (portable installs, experiments).
-
-## What stage 7 does
-
-- **History** (`Ctrl+H`). Every statement that runs, fails or is cancelled is kept in `app.db` (migration 6) with its
-  time, duration, rows and the error text; running the same statement again right after itself updates the entry
-  and counts the run (`×3`) instead of adding a line. Newest first, per connection, at most 5000 per connection.
-  Search is literal and case-insensitive (`%` and `_` are not wildcards), *Only failures* narrows the list; an entry
-  opens in a new tab, is inserted at the cursor, copied, saved as a query, or deleted; *Clear history…* asks first.
-  Deleting a connection forgets its history.
-- **Saved queries** (`Ctrl+S` saves the selection, or the whole editor; `Ctrl+Shift+H` browses them). A name, an
-  optional folder (`Reports/Monthly`), and a scope: *Only for this connection* or available on every connection.
-  Rename, move to another folder, open in a new tab, insert, delete; search looks at names and SQL text.
-- **Diagram export** (`Ctrl+E`, or the ⤓ button above the diagram). PNG (2× scale, large diagrams are scaled down to
-  16000 px), **SVG** (vector, text stays text), **PDF** (one page the size of the diagram) — rendered from the scene
-  exactly as filtered (hidden cards stay out; the selection outline and dimming are not drawn). **Mermaid**
-  `erDiagram` and **DBML** are written from the ER model: tables, columns with PK / FK flags, nullable foreign keys
-  as optional relations, unique foreign keys as 1:1, schema-qualified names when several schemas are shown, awkward
-  identifiers and types made safe.
-- **Cloud providers** (the *Cloud* tab). Pick a service and the form fills in what its documentation prescribes
-  (only into fields you have not filled — what you typed is never overwritten):
-  - **AWS RDS / Aurora (IAM)**, **Google Cloud SQL (IAM)**, **Azure Database (Entra ID)** — no password: a short-lived
-    token is created every time a connection opens (RDS: a presigned request signed locally from the standard AWS
-    credential chain, valid 15 min; Entra: `azure-identity`; Google: OAuth access token from Application Default
-    Credentials or a service-account key file) and shown as the `Cloud token` step of the connection test. A session's
-    second connection renews the token if the first one is about to expire. The SDKs are optional extras
-    (`pip install 'easydbms[aws]'`, `[azure]`, `[gcp]`, `[cloud]`); without one the test says which to install.
-    Google Cloud SQL connects to the instance IP or a running Cloud SQL Auth Proxy — the `cloud-sql-python-connector`
-    itself is not embedded.
-  - **Supabase** (host from the project reference), **Neon**, **PlanetScale** (MySQL, verified TLS), **CockroachDB
-    Cloud** (port 26257, the cluster name in front of the database name) — templates for host, port, database, TLS
-    mode and a hint; the password is an ordinary saved secret.
-- **Themes.** *View → System theme* follows the operating system's light / dark setting and switches live when it
-  changes; the explicit dark and light themes stay.
-- **Packaging.** `python scripts/build_app.py [--check]` runs PyInstaller with `packaging/easydbms.spec` (windowed
-  one-folder app, `EasyDBMS.app` on macOS, the C accelerator and the cloud SDKs bundled when present);
-  `easydbms --version` works without a display. `.github/workflows/ci.yml` runs lint, mypy and the whole suite against
-  PostgreSQL and MariaDB service containers; `.github/workflows/build.yml` builds Linux / Windows / macOS artifacts.
-
-## What stage 6 does
-
-- **SSL / TLS** (PostgreSQL and MySQL/MariaDB). Modes `disable`, `allow` (PostgreSQL), `prefer`, `require`,
-  `verify-ca`, `verify-full` plus a CA bundle, a client certificate and key (the key's passphrase is a secret,
-  never saved in the JSON). The same settings are accepted as URL parameters (`?sslmode=…&sslrootcert=…`, MySQL's
-  `ssl_ca` / `ssl_mode`) and old `options` are migrated. The test looks at the files *before* connecting — missing,
-  not a certificate, expired (with the date), key of another certificate, encrypted key without / with the wrong
-  passphrase — and afterwards reports what the server really negotiated (`TLSv1.3 · TLS_AES_256_GCM_SHA384`).
-- **SSH tunnel.** Password, private key (+ passphrase) or ssh-agent; optionally through a **jump host**. It is opened
-  automatically before the database connection and closed after disconnect (also when connecting fails or is
-  abandoned). The connection keeps the real host name — TLS verifies the certificate against it and `~/.pgpass`
-  is looked up by it — while only the socket goes to the tunnel's local port (`hostaddr` for libpq, a pre-made
-  socket for PyMySQL). A session's second ("meta") connection shares the same tunnel: no second login.
-- **Host keys are checked before any credential is sent.** Our own `known_hosts` (OpenSSH format, in the config
-  directory) plus the read-only `~/.ssh/known_hosts`. An unknown server is **never** accepted silently: the test
-  report and the connection error page show its fingerprint and a *Trust this server…* button; a **changed** key
-  is refused with a warning.
-- **`~/.pgpass`** (honours `PGPASSFILE`, `%APPDATA%\postgresql\pgpass.conf` on Windows): wildcards, `\:` / `\\`
-  escapes, first match wins, and — like libpq — a file other users can read is ignored (with the `chmod 0600`
-  hint). The form shows whether the file knows the connection, never the password. A password that is saved or
-  typed wins; the dialog does not ask when `~/.pgpass` or the service already has one.
-- **`pg_service.conf`** (`PGSERVICEFILE`, `~/.pg_service.conf`, `PGSYSCONFDIR`): name a *service* in the connection
-  and the host, port, user, database, TLS settings and extra libpq parameters it defines fill in whatever the
-  connection leaves empty (what the connection says wins). The host may stay empty.
-- **Secrets** (database password, SSH password / key passphrase, jump-host ones, TLS key passphrase) live only in the
-  keyring / encrypted vault — or in memory for this run if *Save* is off — and are asked for when missing. Nothing
-  secret reaches `connections.json`, URLs or logs; deleting a connection forgets all of them, switching the login
-  method forgets the old secret.
-- **Diagnostics.** Steps: `Service file`, `Password source`, `SSH jump host`, `SSH login`, `SSH tunnel`, `TLS files`,
-  `Encryption`, then the usual `DNS`/`TCP` (skipped behind a tunnel — the SSH steps proved the way), `Sign in`,
-  `Test query`. Failures come with advice: wrong SSH password / key, the SSH server cannot reach the database
-  ("check them from the SSH server's point of view"), forwarding prohibited, undefined `${VAR}`, unknown service.
-- `${ENV}` placeholders are expanded in the service name, TLS file paths and SSH host / user / key file too.
-
-## What stage 5 does
-
-- **What can be edited.** The rows of one table: a table tab, or the result of a plain
-  `SELECT … FROM table [WHERE …] [ORDER BY …] [LIMIT …]` (aliases and column lists are fine, as long as
-  the key columns are in the list). Everything else — joins, `GROUP BY`, `DISTINCT`, aggregates, CTEs,
-  subqueries in `FROM`, views, a read-only connection — is read-only, and the strip under the grid says why
-  (*"Read-only: this is not the rows of a single table …"*). A table **without a primary key** uses a unique
-  index if it has one; otherwise *Choose key columns…* lets you tick the columns that identify a row (remembered
-  per connection in `app.db`, migration 5). A change that would touch more than one row is refused.
-- **Editing.** `F2` / double-click opens an editor that fits the type: a combo for booleans (with NULL), a
-  calendar for dates, date-time and time editors, a checked line for numbers (validators), a line for text
-  (long or multi-line text opens a dialog). The right-click menu has *Set NULL*, *Use the default* (new rows),
-  *Edit in a dialog…*, *Revert this cell / row*. `Ctrl+N` adds a row, `Ctrl+D` duplicates the selected rows (key
-  columns left to the database), `Del` marks rows for deletion (again: restores them), `Ctrl+Z` / `Ctrl+Y` undo and
-  redo, `Esc` discards everything pending (itself undoable). Empty input means NULL for every type but text.
-- **Colours.** Edited cells are yellow (the tooltip says what the value *was*), new rows green (cells you did
-  not fill show `default`, `NULL` or `required`), rows marked for deletion red and struck through, a statement that
-  failed marks its cell dark red with the server's message in the tooltip.
-- **The change set survives** sorting, filtering, paging and reloading (rows are identified by their key, not
-  by position); new rows stay at the end of every page. `⟳` reload keeps your edits and measures them against the
-  fresh rows.
-- **Review, then one transaction.** `Alt+S` (or *Query → Apply changes*) opens the review: the SQL with the
-  values written out, how many rows will be changed / added / deleted. *Apply* runs the statements with bound
-  parameters in **one transaction** on the connection's second ("meta") lane, so a running query is not
-  disturbed. On a **production** connection a second question follows. Deletes run first, then updates, then
-  inserts. The statement text never contains your values — they are parameters.
-- **Optimistic locking.** An `UPDATE` finds its row by the key it was loaded with *and* by the old value of every
-  cell it changes (`col = old` / `col IS NULL`). If somebody else changed or deleted the row meanwhile it matches
-  nothing: the whole transaction is rolled back, the row is named in the message, your edits stay in the grid,
-  and *Reload* lets you rebase them on the current rows and apply again. Floats, JSON, binary and arrays are
-  not compared (equality is unreliable) — they rely on the key.
-- **Errors.** A constraint violation, a NOT NULL, a duplicate key: rolled back, `Nothing was written.`, the cell
-  of the failing statement is marked, the edits are kept. Applying without a connection is reported in the strip,
-  not raised.
-- **Don't lose edits by accident.** Closing a table tab or a query tab, running a statement that replaces an edited
-  result, or quitting the application with pending changes asks first.
-- **Copy** (all grids): `Ctrl+C` / `Ctrl+Shift+C` as TSV, *Copy as CSV*, *Copy as Markdown* from the context menu.
-
-## What stage 4 does
-
-- **Where am I?** Every suggestion starts from an analysis of the statement around the cursor
-  (`core/autocomplete/context.py`): which clause the cursor is in, which tables (and aliases, CTEs,
-  derived tables, `JOIN … USING`) are visible from there, whether a name is being qualified
-  (`o.`, `public.orders.`), whether a quote is open, whether the cursor is in a string or comment (nothing
-  is offered there). It reads the *tokens* of the dialect's own lexer, so it works on text that does not
-  parse yet — `SELECT count(| FROM orders` still knows about `orders` — and asks `sqlglot` only for the
-  output columns of finished subqueries and CTEs (with a token fallback, `*` expanded from the schema).
-- **What is offered where.**
-  statement start → snippets, then statement keywords (per dialect: `COPY` only in PostgreSQL, `PRAGMA`
-  only in SQLite, …) · after `FROM` / `JOIN` / `UPDATE` / `INSERT INTO` → tables, views, CTEs, schemas
-  (tables related by a foreign key to the ones already in the query come first after `JOIN`) ·
-  `SELECT` / `WHERE` / `GROUP BY` / `ORDER BY` / `ON` → columns of the query's tables (qualified with the
-  alias when the name is ambiguous), then aliases, outer-query columns in a subquery, functions and
-  keywords · `alias.` / `table.` / `schema.` → its columns / tables · after `JOIN t ON` → the ready
-  condition from the foreign key (`o.customer_id = c.id`, composite keys and self joins included) ·
-  `ORDER BY` → also the select-list aliases · `INSERT (…` / `SET` / `ALTER … DROP COLUMN` → the columns
-  of the target not yet listed · `::` / `CAST(… AS` / column definitions → types · after a complete
-  clause → the keywords that may follow (`GROUP` → `BY`, `LEFT` → `JOIN`).
-  `Ctrl+Space` on a `*` offers to **expand it into the column list**.
-- **Order.** The context decides first (columns of `FROM` before functions before keywords), then how
-  well the typed text matches (exact, prefix, word start, three or more letters inside, letters in order
-  for abbreviations such as `ordit` → `order_items`, and a typo-tolerant `rapidfuzz` match: `custmer` →
-  `customers`), then how often you accepted the suggestion on this connection (`app.db`, migration 4),
-  then alphabetically.
-- **The popup.** Kind badge (table, view, column, alias, keyword, function, type, snippet, join, CTE),
-  the column's type or the table's size on the right, and a details pane (table comment and columns,
-  column flags and foreign key, function signature). `Tab` / `Enter` accept, `Esc` closes, `↑` `↓`
-  `PgUp` `PgDn` move, double-click accepts, `Ctrl+Space` (or *Query → Autocomplete*) forces it. It opens
-  150 ms after you stop typing, after `.` and after a space following `FROM`, `JOIN`, `INTO`, `UPDATE`
-  or `ON`; the analysis runs in a worker thread and an answer for text that has since changed is
-  discarded. The popup never takes the keyboard focus, so typing goes on while it is open.
-- **Snippets** (`core/autocomplete/snippets.py`): `sel`, `selc`, `seld`, `ins`, `upd`, `del`, `cte` at
-  the start of a statement, `ij` `lj` `rj` `cj` after a table in `FROM` / `JOIN`, `ob` `gb` `lim` after a
-  clause. The cursor lands where you type next (`INNER JOIN | ON `).
-- **Keyword case** — *Query → Keyword case*: UPPER (default), lower, or as typed (follows the case of
-  the letters already typed). It affects keywords, functions, types and snippets, never identifiers.
-- Names are quoted only when the dialect needs it (`"Order Lines"`, `` `select` ``); inside an open quote
-  only identifiers are offered and the closing quote is kept.
-
-Not in this stage: the inside of `$$ … $$` bodies (the editor sees one string there, so nothing is
-offered) and JSON keys after `->`. The ClickBench / schema benchmarks were deliberately not rerun for
-stage 4.
-
-## What stage 3 does
-
-- **Reads the structure with a handful of queries**, not one per table: tables, views (and PostgreSQL
-  materialized views), columns with declared type / `NOT NULL` / default / comment, primary keys in key
-  order, foreign keys (composite, `ON DELETE` / `ON UPDATE`, across schemas), unique and plain indexes —
-  from `pg_catalog`, `information_schema` or SQLite's pragma functions. It runs on the session's own
-  *meta lane* (a second connection), so a long query never delays it and it never delays a query.
-  Re-read it with ↻ or `Ctrl+Shift+R`; it is also read on every connect.
-- **The diagram.** One card per table: title bar, then a row per column with a gold key (primary key), a
-  blue key (foreign key), the declared type and a "?" badge when the column has a comment (shown in the
-  tooltip). Wide tables are collapsed to 14 columns with "+ N more columns" (keys are never hidden);
-  click that row to expand. Views have a purple title bar, junction tables (the many-to-many middle
-  table) an `N:M` badge.
-- **Relations** are orthogonal lines from the foreign-key column to the referenced table: a crow's foot
-  at the referencing (child) end, `||` (required) or `o|` (the foreign key is nullable) at the parent
-  end, and a single bar instead of the crow's foot when the foreign-key columns are unique (1:1). Lines
-  that skip a layer are routed between the cards instead of through them.
-- **Placement.** Referenced tables go left, referencing tables right; unconnected tables are packed into
-  rows below. Drag a card and its position is remembered per connection and schema (`app.db`), while
-  everything you did not move still follows the automatic layout — a table added later simply appears
-  where the layout puts it. ⟲ resets the layout.
-- **Navigation.** Mouse wheel zooms, dragging the background pans, `+` `−` ⛶ `?` buttons and `Ctrl+0` /
-  `Ctrl++` / `Ctrl+-` zoom and fit. Selecting a card highlights it and the tables it is connected to and
-  dims the rest. The search box shows only the tables whose name or a column name matches (Enter fits
-  and selects the first); PostgreSQL / multi-database connections get a schema selector; the ⏵ button
-  folds the right pane down to the connection switcher.
-- **Big schemas.** Levels of detail: below 35 % zoom columns are not drawn, below 14 % titles are not,
-  below 5 % lines are not; a diagram of more than 60 tables across several schemas is grouped into one
-  labelled frame per schema.
-- **Click, double-click, right-click.** Clicking a column types its name into the editor (quoted if
-  needed); double-clicking a card opens the table's data; the context menu offers *Open data*,
-  `SELECT * FROM …`, *Insert table name* and *Copy table name*. `Ctrl+P` jumps to a table or column by
-  name.
-- **Table tabs** (`▦ name`) live in the results area next to the statement results of the current query
-  tab and survive running queries. They page through the rows (page size = *Row limit*), sort on the
-  *server* when you click a header (ascending, descending, off) and take a `WHERE` condition. The
-  condition is checked before it is sent: exactly one condition, no `;` outside quotes. The primary key
-  is always the last sort key, so consecutive pages neither repeat nor skip rows. Paging uses
-  `LIMIT … OFFSET …`, which is exact but re-reads the skipped rows; keyset paging would be faster deep
-  inside very large tables and is not done yet.
-
-## What stage 2 does
-
-- **Query tabs.** Open tabs, their text and the active tab are stored per connection (`app.db`) and
-  restored on the next start. `Ctrl+T` new, `Ctrl+W` close.
-- **Editor.** Line numbers, current-line highlight, syntax colours produced by the *dialect's own
-  lexer* (so `$$` bodies, MySQL `#` comments or SQLite `[quoted]` names are coloured correctly),
-  `Ctrl+Shift+F` formats with the active dialect.
-- **Run what you mean.** `Ctrl+Enter` runs the statement under the cursor (found by the splitter, not by
-  blank lines), the selection if there is one; `F5` runs the whole script statement by statement and stops at the first
-  error (the rest are marked *skipped*); `Esc` cancels the running statement.
-- **Safe by default.** `DROP`, `TRUNCATE`, and `DELETE` / `UPDATE` without `WHERE` ask for confirmation
-  first; on a connection marked *production* every statement that changes data does.
-- **Results grid.** One result tab per statement; row-limited (100 – 100 000, *Query → Row limit*), with a
-  "truncated" marker; click a header to sort, type in the filter box to search every column. Sorting and
-  filtering run in Arrow / NumPy kernels, not Python loops. `Ctrl+C` copies the selection, `Ctrl+Shift+C` with headers.
-- **Large results stay cheap.** PostgreSQL row-limited `SELECT`s stream from a server-side cursor and stop
-  early; MySQL uses an unbuffered cursor; SQLite fetches only what is shown.
-
-## Performance
-
-Two things are separate here and are reported separately: how fast the *engines* are (not ours to
-change) and how much the application *adds*.
-
-- **Native SIMD scanner** (`easydbms/core/simd/_native.c`). The statement splitter that decides what
-  `Ctrl+Enter` runs is also on the path of every script run. A C extension does the same job over the raw
-  string and skips string / comment / `$$` bodies with AVX2 (32 bytes per step) or SSE2 (16), chosen at
-  run time with `__builtin_cpu_supports`; other CPUs use a scalar C loop. It is **optional**: it is built
-  when a compiler is available, the pure-Python splitter is the reference and the fallback, and
-  `EASYDBMS_NO_SIMD=1` turns it off. The extension returns "not mine" for the few inputs it does not
-  model exactly (a non-ASCII digit, a character whose `upper()` is ASCII) and Python takes over.
-  Differential fuzzing (`tests/core/simd`: random scripts built from lexer-hostile fragments, raw random
-  characters, every truncation of a tricky script, vector boundaries on 1/2/4-byte strings; three
-  dialects, with and without the vector scanners) requires identical statements wherever the extension
-  answers. 60 000 scripts per dialect and mode were run without a difference.
-- **Vectorised grid.** Sorting and filtering use PyArrow / NumPy, which dispatch to AVX2 / AVX-512 at run
-  time on their own.
-
-`python -m benchmarks.simd_micro` on the development machine (4 cores, AVX2/AVX-512, Python 3.12):
-
-| Operation | Python reference | native, scalar | native, SIMD |
-|---|---|---|---|
-| find first of `'` or `\` in 64 chars | 0.5 µs | 0.4 µs | 0.3 µs  (1.7× vs re) |
-| find first of `'` or `\` in 1,000 chars | 4.5 µs | 2.9 µs | 0.6 µs  (7.3× vs re) |
-| find first of `'` or `\` in 100,000 chars | 454.4 µs | 250.0 µs | 3.8 µs  (118.5× vs re) |
-| find first of `'` or `\` in 10,000,000 chars | 45.380 ms | 26.955 ms | 418.1 µs  (108.5× vs re) |
-| split 10 statements (3 kB) | 1.284 ms | 46.9 µs | 60.1 µs  (21.4× vs Python) |
-| split 200 statements (80 kB) | 26.971 ms | 919.1 µs | 970.5 µs  (27.8× vs Python) |
-| split 2,000 statements (811 kB) | 311.453 ms | 10.589 ms | 9.630 ms  (32.3× vs Python) |
-| split 2,000 statements (5190 kB) | 821.974 ms | 21.046 ms | 13.392 ms  (61.4× vs Python) |
-| sort 1M rows by int | 529.433 ms | — | 134.540 ms  (3.9× vs Python) |
-| sort 1M rows by text | 670.733 ms | — | 364.247 ms  (1.8× vs Python) |
-| sort 1M rows by float | 453.158 ms | — | 147.728 ms  (3.1× vs Python) |
-| filter 1M rows (substring, ignore case) | 87.474 ms | — | 62.664 ms  (1.4× vs Python) |
-
-Honest reading: the vector scan pays off on **long** strings, comments and `$$` bodies (migrations,
-seed data, function definitions); on short scripts it is no faster than the scalar C loop (the table shows it within noise or
-slightly behind) and almost all of the win over Python comes from not creating a token object per word. The C code does not reduce the time a
-database needs to run the query.
-
-### Structure and diagram (stage 3)
-
-`python -m benchmarks.schema_bench`: a synthetic schema of N tables (9 columns, a primary key, one or two
-foreign keys and an index each), read with EasyDBMS's bulk catalog queries and with SQLAlchemy 2.0
-(`MetaData.reflect()`, and an `Inspector` loop over the tables). Median of 5 runs, same machine; full
-tables in [`benchmarks/results/schema-stage-3.md`](benchmarks/results/schema-stage-3.md).
-
-| 1 000 tables, 9 000 columns, 1 332 foreign keys | EasyDBMS | SQLAlchemy `reflect()` | SQLAlchemy `Inspector` loop |
-|---|---:|---:|---:|
-| PostgreSQL 16 | **251 ms** | 1 238 ms (4.9×) | 8 851 ms (35×) |
-| MariaDB 10.11 | **249 ms** | 1 315 ms (5.3×) | 1 229 ms (4.9×) |
-| SQLite 3.45 | **79 ms** | 1 798 ms (22.6×) | 723 ms (9.1×) |
-
-The two read different things: SQLAlchemy builds typed `Table` objects and reflects more (check
-constraints, server defaults as expressions); EasyDBMS reads what the diagram and, in stage 4,
-autocomplete need. Both returned the same table, column and foreign-key counts. What the user waits for
-is the first column.
-
-| Placing and drawing | 200 tables | 1 000 tables | 3 000 tables |
-|---|---:|---:|---:|
-| Automatic layout (layers, long-edge channels, packing) | 4.9 ms | 33 ms | 174 ms |
-| Build the Qt scene (cards + lines) | 58 ms | 394 ms | — |
-| Repaint with the whole diagram in view | 5 ms | 29 ms | — |
-| Repaint at 100 % zoom | 14 ms | 28 ms | — |
-
-The layout is pure Python and takes about a tenth of a second for the largest schema measured; it is
-not an SIMD candidate — the time goes to building the scene, which is Qt objects, not to arithmetic.
-Details that matter at that size: cards switch to a title-only drawing below 35 % zoom, lines are
-skipped below 5 %, and only items inside the viewport are painted.
-
-### ClickBench (1 M rows)
-
-`python -m benchmarks.clickbench.run` runs the 43 official queries (3 runs each) on 1 M rows (1 % of the
-dataset), default configuration of every engine, same machine (4 cores). Rows marked *EasyDBMS* go
-through the application's own `DatabaseClient`; the others are the plain driver, DuckDB 1.5.6 and
-ClickHouse 26.9 (`chdb`, in-process). It is repeated at the end of every stage. Stage 3 (full per-query
-table in [`benchmarks/results/clickbench-stage-3.md`](benchmarks/results/clickbench-stage-3.md); stage 2 is
-next to it):
-
-| Runner | Relative score (lower is better) | Sum of best times, 43 queries | Stage 2 |
-|---|---:|---:|---:|
-| DuckDB 1.5.6 | 1.10 | 0.8 s | 0.8 s |
-| ClickHouse 26.9 (chdb) | 1.34 | 1.1 s | 1.0 s |
-| PostgreSQL 16 — EasyDBMS / psycopg | 15.21 / 15.19 | 18.2 s / 18.1 s | 18.4 s / 18.4 s |
-| SQLite 3.45 — EasyDBMS / sqlite3 | 15.92 / 15.80 | 21.1 s / 20.9 s | 21.4 s / 21.4 s |
-| MariaDB 10.11 — EasyDBMS / PyMySQL | 81.95 / 79.75 | 83.7 s / 81.3 s | 79.5 s / 79.6 s |
-
-What it says, and what it does not:
-
-- **The application layer adds almost nothing**: the editor's client against the bare driver, runs
-  interleaved so neither warms the cache for the other: +0.7 % PostgreSQL, +1.2 % SQLite, +3.0 % MariaDB
-  (stage 2: +0.0 %, +0.0 %, −0.2 %). The MariaDB figure is within what two connections of the *same* driver
-  differ by: measured separately, two plain PyMySQL connections to the same server were 3.3 % apart on
-  this suite, and the EasyDBMS connection sat between them. A MariaDB-only re-run gave +2.5 %. So the
-  honest statement is "not distinguishable from zero at the ±3 % this setup can resolve".
-- **Engine speed is the engine's**: DuckDB and ClickHouse, column stores built for this workload, finish
-  the suite in about 1 s against 18–84 s for the row stores. EasyDBMS does not make PostgreSQL, MariaDB or
-  SQLite faster and does not claim to; it is a client for them, not an engine.
-- Nothing in stage 3 touched the query path (the structure is read on a second connection), and the
-  numbers agree: the EasyDBMS sums moved by −0.9 % (PostgreSQL), −1.5 % (SQLite) and +5.4 % (MariaDB)
-  since stage 2, while the plain PyMySQL row moved by +2.1 %, i.e. the same noise.
-- Caveats: 1 M rows rather than 100 M, untuned servers sharing the machine with the benchmark, page cache
-  not dropped (first run is warm), a single machine. Absolute numbers are not comparable with the public
-  leaderboard. Two queries differ between engines in text (43) or return a different number of rows for
-  the same text (29, MariaDB); both are listed in the report.
-
-The benchmark is repeated at the end of every stage; see [`benchmarks/README.md`](benchmarks/README.md).
-
-## What stage 1 does
-
-- **Saved connections**, grouped, with a colour label; production connections get a red banner and
-  a red switcher. Duplicate, delete, edit with an "unsaved changes" guard.
-- **URL or Host/Port**, kept in sync both ways: paste `postgres://user:pw@host/db?sslmode=require`
-  and the fields fill in (the password goes to its own field and is dropped from the URL).
-  SQLite connections take a file path (open an existing file, or create a new one).
-- **Test connection** reports each step — DNS, TCP, sign-in, test query (file, open, query for
-  SQLite) — and explains failures: wrong password, unknown database, closed port, TLS, bad file.
-- **Passwords never touch the config file.** They go to the system keyring; where none exists
-  (headless Linux, containers) to an encrypted vault protected by a master password
-  (scrypt + Fernet). A connection can also ask for its password on each run.
-- **`${ENV_VAR}` placeholders** (`${VAR:-default}`, `$${` for a literal) in host, user, database,
-  path, parameters and password, resolved at connect time.
-- **Read-only connections** switch the session to read-only after connecting.
-- **Lazy, parallel sessions.** Picking a connection in the switcher connects in the background;
-  several stay open; the UI never blocks.
-- **Dark and light themes**, **Ukrainian and English** UI (follows the system; a language change applies on the next start).
-- Window size and splitter position are remembered.
-
-## Layout
-
-```
-easydbms/
-├─ core/                    # no Qt
-│  ├─ dialects/             # PostgreSQL / MySQL / SQLite: quoting, literals, lexer, splitter,
-│  │                        #   formatter, translator, vocabulary, type classification
-│  ├─ db/                   # DatabaseClient + PostgresClient, MySqlClient, SqliteClient, errors, TLS files / driver mapping
-│  ├─ connections/          # ConnectionConfig (+ SSL / SSH / provider settings), URL parser, ${ENV}, secret stores, store,
-│  │  └─ providers/         #   AWS RDS / Cloud SQL / Azure token plugins, Supabase / Neon / PlanetScale / CockroachDB templates
-│  │                        #   ~/.pgpass + pg_service.conf, `complete()` (service / password sources)
-│  ├─ ssh/                  # SshTunnel (paramiko; password / key / agent, jump host), known_hosts trust
-│  ├─ session/              # Session (query lane + meta lane, schema events), ConnectionManager,
-│  │                        #   connector (prepare = service + secrets + tunnel; check_connection)
-│  ├─ schema/               # Table / Column / ForeignKey / Index model + per-dialect introspection
-│  ├─ erd/                  # relations, cardinality, layered layout, edge routing, saved positions,
-│  │                        #   Mermaid / DBML export
-│  ├─ browse/               # SQL for paging, sorting and filtering a table
-│  ├─ queries/              # query tabs, danger guard, script job, history, saved queries
-│  ├─ autocomplete/         # cursor context, candidates + ranking, snippets, usage counts
-│  ├─ editing/              # change set (undo/redo), value parsing, UPDATE/INSERT/DELETE builder, targets
-│  ├─ simd/                 # optional C extension: AVX2/SSE2 scanner + statement splitter
-│  ├─ columnar.py           # Arrow/NumPy sort and filter of a result set
-│  ├─ storage/              # app.db (migrations) and settings.toml
-│  ├─ paths.py  services.py
-├─ ui/                      # PySide6: main window, workspace, editor (+ completion popup), results +
-│                           #   table tabs (+ the editable grid: model, delegates, review dialog), erd/ (cards, lines, view, pane), quick open, dialogs, theme, i18n
-└─ app.py
-benchmarks/                 # ClickBench harness and micro-benchmarks
+```bash
+sudo apt install libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3 libxcb-cursor0
 ```
 
-Dependencies point one way: `ui → core/session → core/*`. Worker threads reach the GUI through
-`ui/runtime/qt_bridge.py` (queued signals), so widgets are only touched on the GUI thread.
+Optional extras: `pip install -e ".[cloud]"` adds the AWS, Azure and Google sign-in libraries
+(`[aws]`, `[azure]`, `[gcp]` pick one). To build a standalone application folder, run
+`pip install -e ".[gui,build]"` and then `python scripts/build_app.py`.
 
-### Things worth knowing
+**Your first five minutes**
 
-- **User SQL goes to the driver with no parameter container.** psycopg and PyMySQL treat `%` as a
-  placeholder as soon as any parameters are passed (even an empty dict), which would break every
-  `LIKE '%x%'` typed into an editor. Clients therefore use the raw cursor; tests cover this.
-- **Cancel** is driver specific: PostgreSQL `Connection.cancel()`, MySQL `KILL QUERY` from a second
-  connection, SQLite `interrupt()`. `cancel()` is safe from any thread and only fires while a
-  statement is running.
-- **`execute(max_rows=…)` bounds memory for row-returning queries** (`SELECT`, `WITH`, `VALUES`, `TABLE`, `SHOW`, `EXPLAIN`):
-  PostgreSQL streams them through psycopg's `stream()` and MySQL uses an unbuffered cursor and stops the
-  server-side query when the limit is hit; SQLite fetches `max_rows + 1`. Statements that can change data
-  (`INSERT … RETURNING`, `CALL`) are run buffered so the whole statement is always executed.
-- **Two connections per session.** The query lane runs your statements; the meta lane (opened on
-  first use) reads the structure and loads table pages. `disconnect()` cancels a running statement and
-  waits for it before closing the connection — closing a SQLite connection under a running statement
-  crashes the process. In-memory SQLite databases have only one connection, so the meta lane shares it.
-- **MySQL/MariaDB: join in Python, not in the server.** Joining `KEY_COLUMN_USAGE` to
-  `REFERENTIAL_CONSTRAINTS` inside `information_schema` took 590 ms for 1 000 tables where the two queries
-  alone take 15 ms each, so the join is done on the client.
-- **Applying edits** (`DatabaseClient.apply`): `BEGIN`, every statement with bound parameters, the affected row
-  count of each is checked against what it must be (1), `COMMIT`; anything else rolls back and is reported with the
-  index of the failing statement. MySQL connections are opened with `CLIENT_FOUND_ROWS`, so "rows affected" counts
-  rows an `UPDATE` *matched* (as PostgreSQL and SQLite do), which is what tells "row not found" from "row already has
-  these values". SQLite starts with `BEGIN IMMEDIATE`. Values typed as text are parsed per column type
-  (`core/editing/values.py`); whether a cell *changed* is decided on the values, not their spelling (`5.0` is `5.00`,
-  MySQL's `TIME` as `timedelta`, SQLite's text dates, JSON key order).
-- **Autocomplete never blocks typing.** The analysis (`Completer.complete`) is a pure function of
-  `(text, offset, dialect, schema)`; the editor runs it on one worker thread per connection and drops the
-  answer if the text or the cursor moved. Sentences the core writes itself ("4 cols", "foreign key …") go
-  through `autocomplete.messages.t()`, which the UI points at its Ukrainian catalog, so the core still
-  knows no UI toolkit and no language.
-- **A missing SQLite file is an error**, not a new empty database (opt in with "Create the file").
-- A damaged `connections.json` / `settings.toml` is never overwritten: it is moved aside as
-  `*.broken-<timestamp>`, valid entries are kept, and the user is told.
+1. Start the program and click **Connections…** (<kbd>Ctrl+Shift+C</kbd>).
+2. Click **+ New**, choose **SQLite**, press **New…** and pick a file name. Or choose **PostgreSQL** or
+   **MySQL / MariaDB** and fill in the host, user and database.
+3. Press **Test**, then **Connect**.
+4. Type `SELECT 1;` in the editor and press <kbd>Ctrl+Enter</kbd>. The diagram of your tables appears on the right.
+5. Double-click a table in the diagram to browse its data; double-click a cell to edit it, then press
+   <kbd>Alt+S</kbd> to review and write the change.
 
-## Dialect system
+The full walk-through, with every connection option, is in the **[user guide](docs/user-guide.md)**.
 
-`easydbms.core.dialects` is the single place that knows how the three dialects differ.
-Everything else asks a `Dialect` instead of branching on a database name:
+## Keyboard shortcuts
 
-| Concern | API |
+| Keys | Action |
 |---|---|
-| Lookup by name, alias or URL | `get_dialect("postgres")`, `dialect_from_url("mysql://…")` |
-| Identifier quoting | `dialect.quote_ident()`, `quote_qualified()`, `quote_ident_if_needed()` |
-| Literals (previews only) | `dialect.render_literal(value)` |
-| Null-safe equality (optimistic locking) | `dialect.null_safe_eq(lhs, rhs)` |
-| Server-side pagination | `paginate(dialect, sql, limit=…, offset=…, order_by=…)` |
-| Read-only sessions | `dialect.read_only_statements()` |
-| Column type → editor kind | `dialect.classify_type("tinyint(1)")` |
-| Keywords / functions / types | `dialect.keywords`, `dialect.functions`, `dialect.data_types` |
-| Tokenizing (highlighting) | `tokenize(sql, dialect)` |
-| Statement splitting (Ctrl+Enter) | `split_statements()`, `statement_at()` |
-| Formatting / syntax check | `format_sql()`, `check_syntax()` |
-| Translation between dialects | `translate(sql, source=…, target=…)` |
+| <kbd>Ctrl+Shift+C</kbd> | Open the connections window |
+| <kbd>Ctrl+Enter</kbd> | Run the selection or the current statement |
+| <kbd>F5</kbd> | Run the whole script |
+| <kbd>Esc</kbd> | Stop the running query |
+| <kbd>Ctrl+Space</kbd> | Show suggestions |
+| <kbd>Ctrl+Shift+F</kbd> | Format the SQL |
+| <kbd>Ctrl+T</kbd> / <kbd>Ctrl+W</kbd> | New / close query tab |
+| <kbd>Ctrl+S</kbd> | Save the query |
+| <kbd>Ctrl+H</kbd> / <kbd>Ctrl+Shift+H</kbd> | History / saved queries |
+| <kbd>Alt+S</kbd> | Review and write the edits made in the grid |
+| <kbd>Ctrl+P</kbd> | Go to a table or column |
+| <kbd>Ctrl+Shift+R</kbd> | Re-read the database structure |
+| <kbd>Ctrl+E</kbd> | Export the diagram |
 
-## Development
+## Where your data lives
 
-```bash
-ruff check . && ruff format --check . && mypy      # mypy runs in strict mode, tests included
-pytest                                             # SQLite always; Qt runs headless (offscreen)
-EASYDBMS_FUZZ_ITERATIONS=60000 pytest tests/core/simd   # longer native-vs-Python differential fuzz
-```
+Connections, settings and the trusted SSH servers are stored in your user configuration folder; the history, saved
+queries and tab contents in the data folder (on Linux `~/.config/easydbms` and `~/.local/share/easydbms`). Passwords
+and key passphrases are only ever stored in the system keyring or the encrypted vault. There is no telemetry: the program contacts
+only the servers you set up (databases, SSH hosts and, for token sign-in, your cloud account). Set `EASYDBMS_HOME=/some/folder` to keep everything in one place, for example on a
+USB stick.
 
-The suite is most valuable against real servers. Point it at empty throw-away databases:
+## Documentation
 
-```bash
-export EASYDBMS_TEST_POSTGRES_URL="postgresql+psycopg://user:pass@localhost/easydbms_test"
-export EASYDBMS_TEST_MYSQL_URL="mysql+pymysql://user:pass@localhost/easydbms_test"
-pytest
-```
-
-Without those variables the server cases are skipped. GUI tests use `pytest-qt` on Qt's
-`offscreen` platform; on a bare Linux box Qt needs `libegl1 libgl1 libxkbcommon0 libfontconfig1
-libdbus-1-3` installed.
-
-### Packaging
-
-```bash
-uv pip install -e ".[dev,build]"        # + ".[cloud]" to bundle the AWS / Azure / Google SDKs
-python scripts/make_icon.py             # packaging/icon.png and icon.ico from the painted icon (already committed)
-python scripts/build_app.py --check     # dist/EasyDBMS/ and a --version smoke test
-```
-
-### Testing TLS and SSH
-
-`tests/support/` holds an in-process SSH server, ssh-agent and a throw-away PKI, so the SSH tunnel and TLS-file tests
-need nothing installed. To run the TLS tests against real servers, generate certificates and point both servers at
-them:
-
-```bash
-python -m tests.support.certs /tmp/pki      # ca.pem, server.pem/.key, client.pem/.key (CN erd_cert), client-encrypted.key, other-ca.pem
-export EASYDBMS_TEST_TLS_DIR=/tmp/pki
-```
-
-PostgreSQL: `ssl = on`, `ssl_cert_file` / `ssl_key_file` = `server.pem` / `server.key`, `ssl_ca_file = ca.pem`, a
-`hostssl <db> erd_cert 127.0.0.1/32 cert` line in `pg_hba.conf` and `CREATE ROLE erd_cert LOGIN`.
-MariaDB: `ssl_ca` / `ssl_cert` / `ssl_key` in `[mysqld]` and `CREATE USER erd_cert@'%' REQUIRE X509`. Without
-`EASYDBMS_TEST_TLS_DIR` those tests are skipped; the tunnel-to-a-real-database tests run whenever the server URLs above are set.
+- **[User guide](docs/user-guide.md)**: install, connect, secure connections, editor, diagram, editing, troubleshooting.
+- [Development notes](docs/development.md): architecture, how each feature works, tests, packaging.
+- [Roadmap page](docs/roadmap.html) (open it in a browser; it has a language switch).
 
 ## Roadmap
 
-1. ✅ **Connections** — models, URL parsing, secrets, PostgreSQL/MySQL/SQLite clients, dialog,
-   switcher.
-2. ✅ **SQL editor** (tabs, highlighting from the dialect lexer), run/cancel, read-only results grid,
-   optional native SIMD scanner, ClickBench harness.
-3. ✅ **Schema introspection, ERD pane, table tabs**, `Ctrl+P` go to table, schema benchmarks.
-4. ✅ **Autocomplete** (keywords → tables → columns → aliases → JOIN by FK), snippets, usage ranking.
-5. ✅ **Editable grid**: change set, review (Alt+S), one transaction, optimistic locking, key columns.
-6. ✅ **SSL / TLS, SSH tunnel** (password / key / agent, jump host, host-key trust), **`~/.pgpass`** and **`pg_service.conf`**.
-7. ✅ **Cloud providers**, **history and saved queries**, **diagram export** (PNG / SVG / PDF / Mermaid / DBML), **system theme**, **packaging** (PyInstaller + CI).
+The seven planned stages are finished. The list below shows what each one contains, what has been verified against
+real systems and what has not, and what is proposed next. The same content, with a language switch, is in
+[docs/roadmap.html](docs/roadmap.html).
+
+<!-- roadmap:start -->
+
+### What is done
+
+The stages went in order: each built on the previous one and ended with a test run, screenshots and documentation.
+
+**1. Connections** — The base: the connection model, the database clients and the Connections window.
+
+- PostgreSQL, MySQL/MariaDB and SQLite clients behind one interface, with readable errors.
+- Parsing and building connection URLs; `${ENV}` substitution in fields.
+- Passwords only in the system keyring or an encrypted vault, never in JSON.
+- A Test button that diagnoses step by step: DNS, port, sign-in, query. A database switcher above the diagram.
+
+**2. SQL editor** — Query tabs, running and cancelling, a results table.
+
+- Dialect-aware highlighting, tabs restored on start, SQL formatting.
+- `Ctrl+Enter` runs the statement under the cursor, `F5` the whole script; each statement's result gets its own tab.
+- Guards against the dangerous: `DROP`, `TRUNCATE`, `DELETE` and `UPDATE` without a condition, writes to a production database.
+- An optional C scanner (AVX2/SSE2/NEON) with a pure-Python fallback; a ClickBench rig.
+
+**3. Schema and ER diagram** — The database structure is read in the background and drawn as a diagram.
+
+- Tables, columns, primary and foreign keys, indexes; 1:1 and 1:N relations, N:M junction tables.
+- Layered layout, orthogonal lines, zoom and pan; card positions are remembered.
+- Search over tables and columns, schema choice, `Ctrl+P` to jump to a table, tabs with a table's data.
+
+**4. Autocomplete** — Suggestions from the dialect's syntax and from the connected database's schema.
+
+- Keywords, tables, columns, aliases and CTEs; a `JOIN` condition from the foreign key; `*` expansion.
+- The cursor context copes with unfinished queries; snippets; frequently chosen items rise to the top.
+
+**5. Editable grid** — Edits in the results table that are not written without confirmation.
+
+- Cell editing, new rows, deletion, undo and redo; editors that fit the type: date, boolean, number.
+- `Alt+S` shows the generated `UPDATE`/`INSERT`/`DELETE`; everything is written in one transaction: all or nothing.
+- Optimistic locking: if someone else changed a row, the transaction rolls back and names the row.
+- A table without a primary key: the key columns can be chosen by hand.
+
+**6. Secure connections** — SSL/TLS, the SSH tunnel and the PostgreSQL files.
+
+- **TLS:** modes from `disable` to `verify-full`, a CA, a client certificate and a key with a passphrase. The files are checked before connecting; after sign-in the TLS version and cipher are shown.
+- **SSH tunnel:** password, key or ssh-agent, and a jump host (bastion). The server key is verified before any credentials are sent; an unknown key needs explicit trust, a changed key is refused.
+- **PostgreSQL files:** `~/.pgpass` and `pg_service.conf`; a file other users can read is ignored, as in libpq.
+- Connection test steps: service, password source, SSH, tunnel, TLS files, encryption, sign-in, query.
+
+**7. Clouds, history, export, build** — The last stage of the plan. The interface language was later changed from Russian to Ukrainian.
+
+- **History and saved queries:** `Ctrl+H`, `Ctrl+Shift+H`, `Ctrl+S`. Search, failures only, folders, a scope of “one connection” or “all connections”.
+- **Diagram export** (`Ctrl+E`): PNG, SVG, PDF, and the text formats Mermaid and DBML.
+- **Cloud providers:** AWS RDS/Aurora, Google Cloud SQL and Azure Entra work through a token instead of a password. Supabase, Neon, PlanetScale and CockroachDB get field templates.
+- **The System theme** follows the operating system's light or dark setting and switches live.
+- **Packaging:** PyInstaller, `scripts/build_app.py`, CI on every commit, Linux, Windows and macOS builds on demand.
+
+### What is verified and what is not
+
+The tests are green, but not everything in them is equally close to reality. This shows where a check is real and where a stand-in replaces it.
+
+| Area | Status | How it was checked |
+|---|---|---|
+| PostgreSQL 16, MariaDB 10.11, SQLite | ✅ live | The whole test suite, including grid editing, schema, TLS and tunnel, against real servers. |
+| TLS and client certificates | ✅ live | PostgreSQL and MariaDB with a test certificate authority: `verify-ca`, `verify-full`, certificate login, an encrypted key. |
+| SSH tunnel | 🟡 partly | Against an SSH server and ssh-agent written for the tests (paramiko); real databases behind the tunnel. The system OpenSSH was not used. |
+| AWS RDS (IAM) | 🟡 partly | The token is signed locally by the real boto3. Signing in to a live RDS cluster was not tried. |
+| Azure Entra, Google Cloud SQL | 🟡 on stand-ins | Token and error logic checked against fake SDK modules; no cloud accounts were available. |
+| Supabase, Neon, PlanetScale, CockroachDB | ⬜ not checked | Only the values the templates fill in are tested. No real service was connected. |
+| Oracle MySQL | ⬜ not checked | The MySQL dialect is tested on MariaDB 10.11; Oracle MySQL servers were not run. |
+| Application build | 🟡 Linux only | On Linux PyInstaller builds the app; it starts and prints its version. The Windows and macOS workflow is written but has never run. |
+| Speed (ClickBench, schema) | ⬜ postponed | The benchmark rigs are ready; the runs are postponed until they are started separately. |
+
+### What is proposed next
+
+These are proposals, not commitments. The size S, M, L is a rough estimate of the work; the order inside a group reflects the value to users.
+
+**Close the gaps.** The checks that stages 6 and 7 still need before they count as fully closed.
+
+- **Windows and macOS builds** (`S`) — Run the build workflow on all three systems and make sure the app starts.
+- **Real cloud accounts** (`S`) — One sign-in run against RDS, Azure and Cloud SQL, then Supabase, Neon, PlanetScale and CockroachDB.
+- **System OpenSSH** (`S`) — Run the tunnel and the jump host against a real `sshd` instead of the test server.
+- **Benchmarks** (`S`) — Run ClickBench and the schema tests and keep the results next to the code.
+
+**New features.** What the app still lacks next to mature database clients.
+
+- **Export results to a file** (`S`) — CSV, JSON, XLSX and Parquet from the grid. Copying as CSV and Markdown already exists.
+- **Query plan** (`M`) — `EXPLAIN` and `EXPLAIN ANALYZE` as a tree, with the most expensive nodes highlighted.
+- **CSV import into a table** (`M`) — Column mapping, a preview, loading in one transaction.
+- **Table designer** (`L`) — Creating and changing tables, indexes and keys, with a DDL preview before applying.
+- **Schema diff and migrations** (`L`) — The differences between two databases and a generated migration script.
+
+**Release.** So the app can be used without Python.
+
+- **Signed installers** (`M`) — MSI or NSIS for Windows, a notarised DMG for macOS, an AppImage for Linux.
+- **Auto-update** (`M`) — Checking for a new version and updating without a manual reinstall.
+- **Cloud SQL Connector** (`M`) — Embed Google's connector instead of connecting by IP or through the Auth Proxy.
+- **DuckDB files** (`M`) — A fourth dialect. The client architecture allows it; the original plan postponed it.
+
+### Not planned
+
+Decisions made at the start of the project.
+
+- **SQL Server, Oracle, ClickHouse.** Corporate dialects are out of scope: the app supports three dialects.
+
+<!-- roadmap:end -->

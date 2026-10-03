@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Дорожня карта EasyDBMS</title>
+<style>
+  :root {
+    --bg: #f4f7fb; --surface: #ffffff; --ink: #13202f; --muted: #566880; --line: #d8e0eb;
+    --accent: #2a66e0; --accent-soft: #e3ecfd;
+    --done: #17784f; --done-soft: #def2e8; --part: #8f5a00; --part-soft: #faefd2;
+    --open: #4a5b72; --open-soft: #e6ecf4;
+    --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+    --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d1520; --surface: #142030; --ink: #e4ecf6; --muted: #94a6bc; --line: #25354a;
+      --accent: #6c9cff; --accent-soft: #16294a;
+      --done: #4fc58b; --done-soft: #0f2e22; --part: #e3ab40; --part-soft: #33280f;
+      --open: #9fb0c6; --open-soft: #1b2839; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d1520; --surface: #142030; --ink: #e4ecf6; --muted: #94a6bc; --line: #25354a;
+    --accent: #6c9cff; --accent-soft: #16294a;
+    --done: #4fc58b; --done-soft: #0f2e22; --part: #e3ab40; --part-soft: #33280f;
+    --open: #9fb0c6; --open-soft: #1b2839; color-scheme: dark;
+  }
+  /* one language at a time: Ukrainian unless the page chose English */
+  :root:not([data-ui="en"]) [data-l="en"], :root[data-ui="en"] [data-l="uk"] { display: none !important; }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--ink); font: 15px/1.6 var(--font-body);
+    margin: 0; padding-inline: clamp(16px, 4vw, 32px); padding-block: 40px 64px;
+  }
+  .page { max-width: 960px; margin-inline: auto; display: flex; flex-direction: column; gap: 56px; }
+  h1, h2, h3 { font-family: var(--font-display); font-weight: 600; text-wrap: balance; margin: 0; line-height: 1.15; }
+  p { margin: 0; }
+  code, kbd { font-family: var(--font-mono); font-size: 0.86em; }
+  kbd { background: var(--open-soft); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; white-space: nowrap; }
+  code { background: var(--open-soft); border-radius: 4px; padding: 1px 5px; overflow-wrap: anywhere; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px 32px; align-items: start; }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .eyebrow { font: 500 12px/1.4 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .lang { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+  .lang button {
+    font: 500 12px/1 var(--font-mono); letter-spacing: 0.06em; padding: 8px 12px; border: 0;
+    background: transparent; color: var(--muted); cursor: pointer;
+  }
+  .lang button + button { border-left: 1px solid var(--line); }
+  .lang button[aria-pressed="true"] { background: var(--accent); color: var(--bg); }
+  h1 { font-size: clamp(34px, 6vw, 52px); margin-top: 10px; }
+  .lead { color: var(--muted); max-width: 62ch; margin-top: 14px; font-size: 16.5px; }
+  .mark { width: 112px; height: 88px; color: var(--accent); flex: none; }
+  .facts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px 28px; margin: 0; padding-top: 18px; border-top: 1px solid var(--line); }
+  .facts div { display: flex; gap: 8px; align-items: baseline; }
+  .facts dt { font: 600 20px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+  .facts dd { margin: 0; color: var(--muted); font-size: 13.5px; }
+  @media (max-width: 560px) { header { grid-template-columns: 1fr; } .mark { display: none; } }
+
+  .section-head { display: flex; flex-direction: column; gap: 6px; margin-bottom: 20px; }
+  h2 { font-size: 27px; }
+  .section-head p { color: var(--muted); max-width: 66ch; }
+
+  .stages { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+  .stage { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 0 18px; }
+  .rail { position: relative; display: flex; justify-content: center; }
+  .rail::before { content: ""; position: absolute; top: 0; bottom: 0; width: 2px; background: var(--line); }
+  .stage:first-child .rail::before { top: 22px; }
+  .stage:last-child .rail::before { bottom: calc(100% - 22px); }
+  .node {
+    position: relative; z-index: 1; margin-top: 4px; width: 36px; height: 36px; border-radius: 9px;
+    background: var(--done); color: var(--bg); display: grid; place-items: center;
+    font: 600 17px/1 var(--font-display); font-variant-numeric: tabular-nums;
+  }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .card-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
+  h3 { font-size: 21px; }
+  .summary { color: var(--muted); }
+  .card ul { margin: 0; padding-left: 1.15em; display: flex; flex-direction: column; gap: 5px; }
+  .card li::marker { color: var(--accent); }
+  .card li { padding-left: 2px; }
+  .card strong { font-weight: 600; }
+
+  .pill { display: inline-flex; align-items: center; gap: 6px; font: 500 12px/1 var(--font-mono); padding: 5px 9px; border-radius: 999px; white-space: nowrap; }
+  .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .pill.done { color: var(--done); background: var(--done-soft); }
+  .pill.part { color: var(--part); background: var(--part-soft); }
+  .pill.open { color: var(--open); background: var(--open-soft); }
+
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+  table { width: 100%; border-collapse: collapse; min-width: 640px; }
+  th, td { text-align: left; padding: 12px 16px; vertical-align: top; border-bottom: 1px solid var(--line); }
+  tr:last-child td { border-bottom: 0; }
+  th { font: 500 12px/1.3 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); background: var(--open-soft); }
+  td:first-child { font-weight: 500; width: 30%; }
+  td:nth-child(2) { width: 18%; }
+  td:last-child { color: var(--muted); }
+
+  .board { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 16px; align-items: start; }
+  .group { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 18px 8px; min-width: 0; }
+  .group h3 { font-size: 19px; }
+  .group > p { color: var(--muted); font-size: 13.5px; margin: 6px 0 14px; }
+  .item { padding: 14px 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 5px; }
+  .item-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .item h4 { margin: 0; font: 600 15px/1.35 var(--font-body); }
+  .item p { color: var(--muted); font-size: 14px; }
+  .size { font: 500 12px/1 var(--font-mono); color: var(--accent); background: var(--accent-soft); border-radius: 5px; padding: 4px 7px; flex: none; }
+  .no { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+  .no li { padding: 12px 0; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+  .no li strong { color: var(--ink); font-weight: 500; }
+  footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 18px; }
+
+  @media (max-width: 520px) {
+    .stage { grid-template-columns: 30px minmax(0, 1fr); gap: 0 12px; }
+    .node { width: 30px; height: 30px; font-size: 15px; }
+    .card { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <div>
+      <div class="top">
+        <p class="eyebrow">EasyDBMS 0.7.0 · Python 3.12 · PySide6</p>
+        <div class="lang" role="group" aria-label="Language / Мова"><button type="button" data-set="uk" aria-pressed="true">УКР</button><button type="button" data-set="en" aria-pressed="false">ENG</button></div>
+      </div>
+      <h1><span data-l="uk">Дорожня карта EasyDBMS</span><span data-l="en">EasyDBMS roadmap</span></h1>
+      <p class="lead"><span data-l="uk">Настільний клієнт для PostgreSQL, MySQL/MariaDB і SQLite: редактор SQL, діаграма зв'язків і редагована сітка. Усі сім етапів початкового плану виконано. Нижче: що ввійшло в кожен етап, що перевірено лише частково і що варто зробити далі.</span><span data-l="en">A desktop client for PostgreSQL, MySQL/MariaDB and SQLite: an SQL editor, a relationship diagram and an editable grid. All seven stages of the original plan are done. Below: what each stage contains, what has only been partly checked, and what to do next.</span></p>
+    </div>
+    <svg class="mark" viewBox="0 0 112 88" role="img" aria-label="ER diagram"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M34 22h44M30 32l14 28M82 32L68 60"/><rect x="4" y="8" width="32" height="26" rx="5"/><path d="M4 16h32"/><rect x="76" y="8" width="32" height="26" rx="5"/><path d="M76 16h32"/><rect x="40" y="56" width="32" height="26" rx="5"/><path d="M40 64h32"/></g></svg>
+    <dl class="facts">
+      <div><dt><span data-l="uk">7 із 7</span><span data-l="en">7 of 7</span></dt><dd><span data-l="uk">етапів завершено</span><span data-l="en">stages complete</span></dd></div>
+      <div><dt><span data-l="uk">2158</span><span data-l="en">2158</span></dt><dd><span data-l="uk">тестів проходять на живих PostgreSQL і MariaDB</span><span data-l="en">tests pass against live PostgreSQL and MariaDB</span></dd></div>
+      <div><dt><span data-l="uk">3</span><span data-l="en">3</span></dt><dd><span data-l="uk">діалекти SQL</span><span data-l="en">SQL dialects</span></dd></div>
+      <div><dt><span data-l="uk">2</span><span data-l="en">2</span></dt><dd><span data-l="uk">мови інтерфейсу: українська та англійська</span><span data-l="en">interface languages: Ukrainian and English</span></dd></div>
+    </dl>
+  </header>
+  <section aria-labelledby="done"><div class="section-head">
+    <h2 id="done"><span data-l="uk">Що зроблено</span><span data-l="en">What is done</span></h2><p><span data-l="uk">Етапи йшли по порядку: кожен будувався на попередньому й закінчувався прогоном тестів, знімками екрана та записом у документації.</span><span data-l="en">The stages went in order: each built on the previous one and ended with a test run, screenshots and documentation.</span></p></div>
+    <ol class="stages">
+      <li class="stage"><div class="rail"><span class="node">1</span></div>
+        <article class="card">
+          <div class="card-top"><h3><span data-l="uk">Підключення</span><span data-l="en">Connections</span></h3><span class="pill done"><span data-l="uk">готово</span><span data-l="en">done</span></span></div>
+          <p class="summary"><span data-l="uk">Основа: модель підключення, клієнти баз даних і вікно «Підключення».</span><span data-l="en">The base: the connection model, the database clients and the Connections window.</span></p>
+          <ul>
+            <li><span data-l="uk">Клієнти PostgreSQL, MySQL/MariaDB і SQLite з єдиним інтерфейсом і зрозумілими помилками.</span><span data-l="en">PostgreSQL, MySQL/MariaDB and SQLite clients behind one interface, with readable errors.</span></li>
+            <li><span data-l="uk">Розбір і складання URL підключення; підстановка <code>${ENV}</code> у поля.</span><span data-l="en">Parsing and building connection URLs; <code>${ENV}</code> substitution in fields.</span></li>
+            <li><span data-l="uk">Паролі лише в системному keyring або в зашифрованому сховищі, ніколи в JSON.</span><span data-l="en">Passwords only in the system keyring or an encrypted vault, never in JSON.</span></li>
+            <li><span data-l="uk">Кнопка «Перевірити» з діагностикою по кроках: DNS, порт, вхід, запит. Вибір бази над діаграмою.</span><span data-l="en">A Test button that diagnoses step by step: DNS, port, sign-in, query. A database switcher above the diagram.</span></li>
+          </ul></article></li>
+      <li class="stage"><div class="rail"><span class="node">2</span></div>
+        <article class="card">
+          <div class="card-top"><h3><span data-l="uk">Редактор SQL</span><span data-l="en">SQL editor</span></h3><span class="pill done"><span data-l="uk">готово</span><span data-l="en">done</span></span></div>
+          <p class="summary"><span data-l="uk">Вкладки запитів, запуск і скасування, таблиця результатів.</span><span data-l="en">Query tabs, running and cancelling, a results table.</span></p>
+          <ul>
+            <li><span data-l="uk">Підсвічування за діалектом, вкладки відновлюються під час запуску, форматування SQL.</span><span data-l="en">Dialect-aware highlighting, tabs restored on start, SQL formatting.</span></li>
+            <li><span data-l="uk"><kbd>Ctrl+Enter</kbd> виконує оператор під курсором, <kbd>F5</kbd> увесь скрипт; результат кожного оператора у своїй вкладці.</span><span data-l="en"><kbd>Ctrl+Enter</kbd> runs the statement under the cursor, <kbd>F5</kbd> the whole script; each statement's result gets its own tab.</span></li>
+            <li><span data-l="uk">Захист від небезпечного: <code>DROP</code>, <code>TRUNCATE</code>, <code>DELETE</code> і <code>UPDATE</code> без умови, запис у робочу базу.</span><span data-l="en">Guards against the dangerous: <code>DROP</code>, <code>TRUNCATE</code>, <code>DELETE</code> and <code>UPDATE</code> without a condition, writes to a production database.</span></li>
+            <li><span data-l="uk">Необов'язковий сканер на C (AVX2/SSE2/NEON) із запасним варіантом на Python; стенд ClickBench.</span><span data-l="en">An optional C scanner (AVX2/SSE2/NEON) with a pure-Python fallback; a ClickBench rig.</span></li>
+          </ul></article></li>
+      <li class="stage"><div class="rail"><span class="node">3</span></div>
+        <article class="card">
+          <div class="card-top"><h3><span data-l="uk">Схема та ER-діаграма</span><span data-l="en">Schema and ER diagram</span></h3><span class="pill done"><span data-l="uk">готово</span><span data-l="en">done</span></span></div>
+          <p class="summary"><span data-l="uk">Структура бази читається у фоні й малюється як діаграма.</span><span data-l="en">The database structure is read in the background and drawn as a diagram.</span></p>
+          <ul>
+            <li><span data-l="uk">Таблиці, стовпці, первинні та зовнішні ключі, індекси; зв'язки 1:1 і 1:N, таблиці-зв'язки N:M.</span><span data-l="en">Tables, columns, primary and foreign keys, indexes; 1:1 and 1:N relations, N:M junction tables.</span></li>
+            <li><span data-l="uk">Пошарове розкладання, ортогональні лінії, масштаб і переміщення; положення карток запам'ятовується.</span><span data-l="en">Layered layout, orthogonal lines, zoom and pan; card positions are remembered.</span></li>
+            <li><span data-l="uk">Пошук за таблицями та стовпцями, вибір схеми, <kbd>Ctrl+P</kbd> для переходу до таблиці, вкладки з даними таблиці.</span><span data-l="en">Search over tables and columns, schema choice, <kbd>Ctrl+P</kbd> to jump to a table, tabs with a table's data.</span></li>
+          </ul></article></li>
+      <li class="stage"><div class="rail"><span class="node">4</span></div>
+        <article class="card">
+          <div class="card-top"><h3><span data-l="uk">Автодоповнення</span><span data-l="en">Autocomplete</span></h3><span class="pill done"><span data-l="uk">готово</span><span data-l="en">done</span></span></div>
+          <p class="summary"><span data-l="uk">Підказки з синтаксису діалекту та зі схеми підключеної бази.</span><span data-l="en">Suggestions from the dialect's syntax and from the connected database's schema.</span></p>
+          <ul>
+            <li><span data-l="uk">Ключові слова, таблиці, стовпці, псевдоніми та CTE; умова <code>JOIN</code> за зовнішнім ключем; розгортання <code>*</code>.</span><span data-l="en">Keywords, tables, columns, aliases and CTEs; a <code>JOIN</code> condition from the foreign key; <code>*</code> expansion.</span></li>
+            <li><span data-l="uk">Контекст курсора витримує недописані запити; сніпети; часті варіанти піднімаються вище.</span><span data-l="en">The cursor context copes with unfinished queries; snippets; frequently chosen items rise to the top.</span></li>
+          </ul></article></li>
+      <li class="stage"><div class="rail"><span class="node">5</span></div>
+        <article class="card">
+          <div class="card-top"><h3><span data-l="uk">Редагована сітка</span><span data-l="en">Editable grid</span></h3><span class="pill done"><span data-l="uk">готово</span><span data-l="en">done</span></span></div>
+          <p class="summary"><span data-l="uk">Правки в таблиці результатів, які не записуються без підтвердження.</span><span data-l="en">Edits in the results table that are not written without confirmation.</span></p>
+          <ul>
+            <li><span data-l="uk">Правка комірки, новий рядок, видалення, скасування й повтор; редактори під тип: дата, булеве, число.</span><span data-l="en">Cell editing, new rows, deletion, undo and redo; editors that fit the type: date, boolean, number.</span></li>
+            <li><span data-l="uk"><kbd>Alt+S</kbd> показує згенеровані <code>UPDATE</code>/<code>INSERT</code>/<code>DELETE</code>, запис іде однією транзакцією: усе або нічого.</span><span data-l="en"><kbd>Alt+S</kbd> shows the generated <code>UPDATE</code>/<code>INSERT</code>/<code>DELETE</code>; everything is written in one transaction: all or nothing.</span></li>
+            <li><span data-l="uk">Оптимістичне блокування: якщо рядок змінив хтось інший, транзакція відкочується й називає рядок.</span><span data-l="en">Optimistic locking: if someone else changed a row, the transaction rolls back and names the row.</span></li>
+            <li><span data-l="uk">Таблиця без первинного ключа: ключові стовпці можна вибрати вручну.</span><span data-l="en">A table without a primary key: the key columns can be chosen by hand.</span></li>
+          </ul></article></li>
+      <li class="stage"><div class="rail"><span class="node">6</span></div>
+        <article class="card">
+          <div class="card-top"><h3><span data-l="uk">Безпечні підключення</span><span data-l="en">Secure connections</span></h3><span class="pill done"><span data-l="uk">готово</span><span data-l="en">done</span></span></div>
+          <p class="summary"><span data-l="uk">SSL/TLS, SSH-тунель і файли PostgreSQL.</span><span data-l="en">SSL/TLS, the SSH tunnel and the PostgreSQL files.</span></p>
+          <ul>
+            <li><span data-l="uk"><strong>TLS:</strong> режими від <code>disable</code> до <code>verify-full</code>, CA, клієнтський сертифікат і ключ із парольною фразою. Файли перевіряються до підключення, після входу показується версія TLS і шифр.</span><span data-l="en"><strong>TLS:</strong> modes from <code>disable</code> to <code>verify-full</code>, a CA, a client certificate and a key with a passphrase. The files are checked before connecting; after sign-in the TLS version and cipher are shown.</span></li>
+            <li><span data-l="uk"><strong>SSH-тунель:</strong> пароль, ключ або ssh-agent, проміжний вузол (бастіон). Ключ сервера перевіряється до надсилання облікових даних; невідомий ключ потребує явної довіри, ключ, що змінився, блокується.</span><span data-l="en"><strong>SSH tunnel:</strong> password, key or ssh-agent, and a jump host (bastion). The server key is verified before any credentials are sent; an unknown key needs explicit trust, a changed key is refused.</span></li>
+            <li><span data-l="uk"><strong>Файли PostgreSQL:</strong> <code>~/.pgpass</code> і <code>pg_service.conf</code>; файл, доступний іншим користувачам, ігнорується, як у libpq.</span><span data-l="en"><strong>PostgreSQL files:</strong> <code>~/.pgpass</code> and <code>pg_service.conf</code>; a file other users can read is ignored, as in libpq.</span></li>
+            <li><span data-l="uk">Кроки перевірки підключення: сервіс, джерело пароля, SSH, тунель, файли TLS, шифрування, вхід, запит.</span><span data-l="en">Connection test steps: service, password source, SSH, tunnel, TLS files, encryption, sign-in, query.</span></li>
+          </ul></article></li>
+      <li class="stage"><div class="rail"><span class="node">7</span></div>
+        <article class="card">
+          <div class="card-top"><h3><span data-l="uk">Хмари, історія, експорт, збірка</span><span data-l="en">Clouds, history, export, build</span></h3><span class="pill done"><span data-l="uk">готово</span><span data-l="en">done</span></span></div>
+          <p class="summary"><span data-l="uk">Останній етап плану. Згодом інтерфейс перейшов з російської на українську.</span><span data-l="en">The last stage of the plan. The interface language was later changed from Russian to Ukrainian.</span></p>
+          <ul>
+            <li><span data-l="uk"><strong>Історія та збережені запити:</strong> <kbd>Ctrl+H</kbd>, <kbd>Ctrl+Shift+H</kbd>, <kbd>Ctrl+S</kbd>. Пошук, лише помилки, папки, область «для одного підключення» або «для всіх».</span><span data-l="en"><strong>History and saved queries:</strong> <kbd>Ctrl+H</kbd>, <kbd>Ctrl+Shift+H</kbd>, <kbd>Ctrl+S</kbd>. Search, failures only, folders, a scope of “one connection” or “all connections”.</span></li>
+            <li><span data-l="uk"><strong>Експорт діаграми</strong> (<kbd>Ctrl+E</kbd>): PNG, SVG, PDF, а також текстові Mermaid і DBML.</span><span data-l="en"><strong>Diagram export</strong> (<kbd>Ctrl+E</kbd>): PNG, SVG, PDF, and the text formats Mermaid and DBML.</span></li>
+            <li><span data-l="uk"><strong>Хмарні провайдери:</strong> AWS RDS/Aurora, Google Cloud SQL і Azure Entra працюють через токен замість пароля. Для Supabase, Neon, PlanetScale і CockroachDB підставляються шаблони полів.</span><span data-l="en"><strong>Cloud providers:</strong> AWS RDS/Aurora, Google Cloud SQL and Azure Entra work through a token instead of a password. Supabase, Neon, PlanetScale and CockroachDB get field templates.</span></li>
+            <li><span data-l="uk"><strong>Тема «Системна»</strong> слідує за світлою чи темною темою ОС і перемикається на льоту.</span><span data-l="en"><strong>The System theme</strong> follows the operating system's light or dark setting and switches live.</span></li>
+            <li><span data-l="uk"><strong>Пакування:</strong> PyInstaller, <code>scripts/build_app.py</code>, CI на кожен коміт, збірка під Linux, Windows і macOS на вимогу.</span><span data-l="en"><strong>Packaging:</strong> PyInstaller, <code>scripts/build_app.py</code>, CI on every commit, Linux, Windows and macOS builds on demand.</span></li>
+          </ul></article></li>
+    </ol></section>
+  <section aria-labelledby="checked"><div class="section-head">
+    <h2 id="checked"><span data-l="uk">Що перевірено, а що ні</span><span data-l="en">What is verified and what is not</span></h2><p><span data-l="uk">Тести зелені, але не все в них однаково близьке до реальності. Тут видно, де перевірка справжня, а де її замінює заглушка.</span><span data-l="en">The tests are green, but not everything in them is equally close to reality. This shows where a check is real and where a stand-in replaces it.</span></p></div>
+    <div class="table-wrap"><table><thead><tr>
+<th scope="col"><span data-l="uk">Область</span><span data-l="en">Area</span></th><th scope="col"><span data-l="uk">Статус</span><span data-l="en">Status</span></th><th scope="col"><span data-l="uk">Чим перевірено</span><span data-l="en">How it was checked</span></th></tr></thead><tbody>
+      <tr><td><span data-l="uk">PostgreSQL 16, MariaDB 10.11, SQLite</span><span data-l="en">PostgreSQL 16, MariaDB 10.11, SQLite</span></td><td><span class="pill done"><span data-l="uk">наживо</span><span data-l="en">live</span></span></td><td><span data-l="uk">Увесь набір тестів, зокрема правки в сітці, схема, TLS і тунель, на справжніх серверах.</span><span data-l="en">The whole test suite, including grid editing, schema, TLS and tunnel, against real servers.</span></td></tr>
+      <tr><td><span data-l="uk">TLS і клієнтські сертифікати</span><span data-l="en">TLS and client certificates</span></td><td><span class="pill done"><span data-l="uk">наживо</span><span data-l="en">live</span></span></td><td><span data-l="uk">PostgreSQL і MariaDB із тестовим центром сертифікації: <code>verify-ca</code>, <code>verify-full</code>, вхід за сертифікатом, зашифрований ключ.</span><span data-l="en">PostgreSQL and MariaDB with a test certificate authority: <code>verify-ca</code>, <code>verify-full</code>, certificate login, an encrypted key.</span></td></tr>
+      <tr><td><span data-l="uk">SSH-тунель</span><span data-l="en">SSH tunnel</span></td><td><span class="pill part"><span data-l="uk">частково</span><span data-l="en">partly</span></span></td><td><span data-l="uk">Проти SSH-сервера й ssh-agent, написаних для тестів на paramiko; за тунелем справжні бази. Системний OpenSSH не використовувався.</span><span data-l="en">Against an SSH server and ssh-agent written for the tests (paramiko); real databases behind the tunnel. The system OpenSSH was not used.</span></td></tr>
+      <tr><td><span data-l="uk">AWS RDS (IAM)</span><span data-l="en">AWS RDS (IAM)</span></td><td><span class="pill part"><span data-l="uk">частково</span><span data-l="en">partly</span></span></td><td><span data-l="uk">Токен підписується справжнім boto3 локально. Вхід у живий кластер RDS не перевірявся.</span><span data-l="en">The token is signed locally by the real boto3. Signing in to a live RDS cluster was not tried.</span></td></tr>
+      <tr><td><span data-l="uk">Azure Entra, Google Cloud SQL</span><span data-l="en">Azure Entra, Google Cloud SQL</span></td><td><span class="pill part"><span data-l="uk">на заглушках</span><span data-l="en">on stand-ins</span></span></td><td><span data-l="uk">Логіку токенів і помилок перевірено на підроблених модулях SDK; хмарних акаунтів не було.</span><span data-l="en">Token and error logic checked against fake SDK modules; no cloud accounts were available.</span></td></tr>
+      <tr><td><span data-l="uk">Supabase, Neon, PlanetScale, CockroachDB</span><span data-l="en">Supabase, Neon, PlanetScale, CockroachDB</span></td><td><span class="pill open"><span data-l="uk">не перевірено</span><span data-l="en">not checked</span></span></td><td><span data-l="uk">Перевірено лише значення, які підставляють шаблони. До справжніх сервісів не підключалися.</span><span data-l="en">Only the values the templates fill in are tested. No real service was connected.</span></td></tr>
+      <tr><td><span data-l="uk">Oracle MySQL</span><span data-l="en">Oracle MySQL</span></td><td><span class="pill open"><span data-l="uk">не перевірено</span><span data-l="en">not checked</span></span></td><td><span data-l="uk">Діалект MySQL перевірено на MariaDB 10.11; сервери Oracle MySQL не запускалися.</span><span data-l="en">The MySQL dialect is tested on MariaDB 10.11; Oracle MySQL servers were not run.</span></td></tr>
+      <tr><td><span data-l="uk">Збірка застосунку</span><span data-l="en">Application build</span></td><td><span class="pill part"><span data-l="uk">лише Linux</span><span data-l="en">Linux only</span></span></td><td><span data-l="uk">На Linux PyInstaller зібрав застосунок, він запускається й друкує версію. Воркфлоу для Windows і macOS написано, але жодного разу не запускано.</span><span data-l="en">On Linux PyInstaller builds the app; it starts and prints its version. The Windows and macOS workflow is written but has never run.</span></td></tr>
+      <tr><td><span data-l="uk">Швидкість (ClickBench, схема)</span><span data-l="en">Speed (ClickBench, schema)</span></td><td><span class="pill open"><span data-l="uk">відкладено</span><span data-l="en">postponed</span></span></td><td><span data-l="uk">Стенди готові, прогони відкладено до окремого запуску.</span><span data-l="en">The benchmark rigs are ready; the runs are postponed until they are started separately.</span></td></tr>
+    </tbody></table></div></section>
+  <section aria-labelledby="next"><div class="section-head">
+    <h2 id="next"><span data-l="uk">Що пропонується далі</span><span data-l="en">What is proposed next</span></h2><p><span data-l="uk">Це пропозиції, а не зобов'язання. Розмір S, M, L — груба оцінка обсягу роботи; порядок усередині групи відображає цінність для користувача.</span><span data-l="en">These are proposals, not commitments. The size S, M, L is a rough estimate of the work; the order inside a group reflects the value to users.</span></p></div>
+    <div class="board">
+      <div class="group"><h3><span data-l="uk">Закрити прогалини</span><span data-l="en">Close the gaps</span></h3><p><span data-l="uk">Дороблення перевірок, без яких етапи 6 і 7 не можна вважати закритими остаточно.</span><span data-l="en">The checks that stages 6 and 7 still need before they count as fully closed.</span></p>
+        <div class="item"><div class="item-top"><h4><span data-l="uk">Збірки Windows і macOS</span><span data-l="en">Windows and macOS builds</span></h4><span class="size">S</span></div><p><span data-l="uk">Запустити воркфлоу збірки на всіх трьох системах і переконатися, що застосунок стартує.</span><span data-l="en">Run the build workflow on all three systems and make sure the app starts.</span></p></div>
+        <div class="item"><div class="item-top"><h4><span data-l="uk">Справжні хмарні акаунти</span><span data-l="en">Real cloud accounts</span></h4><span class="size">S</span></div><p><span data-l="uk">Один прогін входу в RDS, Azure і Cloud SQL, а потім у Supabase, Neon, PlanetScale і CockroachDB.</span><span data-l="en">One sign-in run against RDS, Azure and Cloud SQL, then Supabase, Neon, PlanetScale and CockroachDB.</span></p></div>
+        <div class="item"><div class="item-top"><h4><span data-l="uk">Системний OpenSSH</span><span data-l="en">System OpenSSH</span></h4><span class="size">S</span></div><p><span data-l="uk">Прогнати тунель і проміжний вузол проти справжнього <code>sshd</code> замість тестового сервера.</span><span data-l="en">Run the tunnel and the jump host against a real <code>sshd</code> instead of the test server.</span></p></div>
+        <div class="item"><div class="item-top"><h4><span data-l="uk">Бенчмарки</span><span data-l="en">Benchmarks</span></h4><span class="size">S</span></div><p><span data-l="uk">Запустити ClickBench і тести схеми та зберегти результати поруч із кодом.</span><span data-l="en">Run ClickBench and the schema tests and keep the results next to the code.</span></p></div>
+      </div>
+      <div class="group"><h3><span data-l="uk">Нові можливості</span><span data-l="en">New features</span></h3><p><span data-l="uk">Те, чого застосунку бракує поряд зі зрілими клієнтами баз даних.</span><span data-l="en">What the app still lacks next to mature database clients.</span></p>
+        <div class="item"><div class="item-top"><h4><span data-l="uk">Експорт результатів у файл</span><span data-l="en">Export results to a file</span></h4><span class="size">S</span></div><p><span data-l="uk">CSV, JSON, XLSX і Parquet із сітки. Копіювання в CSV і Markdown уже є.</span><span data-l="en">CSV, JSON, XLSX and Parquet from the grid. Copying as CSV and Markdown already exists.</span></p></div>
+        <div class="item"><div class="item-top"><h4><span data-l="uk">План запиту</span><span data-l="en">Query plan</span></h4><span class="size">M</span></div><p><span data-l="uk"><code>EXPLAIN</code> і <code>EXPLAIN ANALYZE</code> деревом, з підсвічуванням найдорожчих вузлів.</span><span data-l="en"><code>EXPLAIN</code> and <code>EXPLAIN ANALYZE</code> as a tree, with the most expensive nodes highlighted.</span></p></div>
+        <div class="item"><div class="item-top"><h4><span data-l="uk">Імпорт CSV у таблицю</span><span data-l="en">CSV import into a table</span></h4><span class="size">M</span></div><p><span data-l="uk">Зіставлення стовпців, попередній перегляд, завантаження однією транзакцією.</span><span data-l="en">Column mapping, a preview, loading in one transaction.</span></p></div>
+        <div class="item"><div class="item-top"><h4><span data-l="uk">Редактор таблиць</span><span data-l="en">Table designer</span></h4><span class="size">L</span></div><p><span data-l="uk">Створення й зміна таблиць, індексів і ключів з попереднім переглядом DDL перед застосуванням.</span><span data-l="en">Creating and changing tables, indexes and keys, with a DDL preview before applying.</span></p></div>
+        <div class="item"><div class="item-top"><h4><span data-l="uk">Порівняння схем і міграції</span><span data-l="en">Schema diff and migrations</span></h4><span class="size">L</span></div><p><span data-l="uk">Відмінності двох баз і згенерований скрипт міграції.</span><span data-l="en">The differences between two databases and a generated migration script.</span></p></div>
+      </div>
+      <div class="group"><h3><span data-l="uk">Випуск</span><span data-l="en">Release</span></h3><p><span data-l="uk">Щоб застосунком можна було користуватися без Python.</span><span data-l="en">So the app can be used without Python.</span></p>
+        <div class="item"><div class="item-top"><h4><span data-l="uk">Інсталятори з підписом</span><span data-l="en">Signed installers</span></h4><span class="size">M</span></div><p><span data-l="uk">MSI або NSIS для Windows, DMG з нотаризацією для macOS, AppImage для Linux.</span><span data-l="en">MSI or NSIS for Windows, a notarised DMG for macOS, an AppImage for Linux.</span></p></div>
+        <div class="item"><div class="item-top"><h4><span data-l="uk">Автооновлення</span><span data-l="en">Auto-update</span></h4><span class="size">M</span></div><p><span data-l="uk">Перевірка нової версії та оновлення без ручного перевстановлення.</span><span data-l="en">Checking for a new version and updating without a manual reinstall.</span></p></div>
+        <div class="item"><div class="item-top"><h4><span data-l="uk">Cloud SQL Connector</span><span data-l="en">Cloud SQL Connector</span></h4><span class="size">M</span></div><p><span data-l="uk">Вбудувати конектор Google замість підключення за IP або через Auth Proxy.</span><span data-l="en">Embed Google's connector instead of connecting by IP or through the Auth Proxy.</span></p></div>
+        <div class="item"><div class="item-top"><h4><span data-l="uk">Файли DuckDB</span><span data-l="en">DuckDB files</span></h4><span class="size">M</span></div><p><span data-l="uk">Четвертий діалект. Архітектура клієнтів це дозволяє, у початковому плані його було відкладено.</span><span data-l="en">A fourth dialect. The client architecture allows it; the original plan postponed it.</span></p></div>
+      </div>
+    </div></section>
+  <section aria-labelledby="no"><div class="section-head">
+    <h2 id="no"><span data-l="uk">Не планується</span><span data-l="en">Not planned</span></h2><p><span data-l="uk">Рішення, ухвалені на старті проєкту.</span><span data-l="en">Decisions made at the start of the project.</span></p></div>
+    <ul class="no">
+      <li><span data-l="uk"><strong>SQL Server, Oracle, ClickHouse.</strong> Корпоративні діалекти виключено: застосунок підтримує три діалекти.</span><span data-l="en"><strong>SQL Server, Oracle, ClickHouse.</strong> Corporate dialects are out of scope: the app supports three dialects.</span></li>
+    </ul></section>
+  <footer><p><span data-l="uk">Версія 0.7.0. Тести: 2158 із живими PostgreSQL і MariaDB, 1881 на самому SQLite; <code>ruff</code> і <code>mypy</code> без зауважень.</span><span data-l="en">Version 0.7.0. Tests: 2158 with live PostgreSQL and MariaDB, 1881 on SQLite alone; <code>ruff</code> and <code>mypy</code> report nothing.</span></p></footer>
+</div>
+<script>
+(function () {
+  var root = document.documentElement;
+  var KEY = "easydbms-roadmap-lang";
+  function saved() { try { return localStorage.getItem(KEY); } catch (e) { return null; } }
+  function remember(v) { try { localStorage.setItem(KEY, v); } catch (e) { /* private mode: the choice just is not kept */ } }
+  var titles = {"uk": "Дорожня карта EasyDBMS", "en": "EasyDBMS roadmap"};
+  function apply(lang) {
+    root.setAttribute("data-ui", lang);
+    root.setAttribute("lang", lang);
+    document.title = titles[lang];
+    var buttons = document.querySelectorAll(".lang button");
+    for (var i = 0; i < buttons.length; i++) {
+      buttons[i].setAttribute("aria-pressed", buttons[i].getAttribute("data-set") === lang ? "true" : "false");
+    }
+  }
+  var wanted = saved();
+  if (wanted !== "uk" && wanted !== "en") {
+    wanted = /^uk\b/i.test(navigator.language || "") ? "uk" : "en";
+  }
+  apply(wanted);
+  var buttons = document.querySelectorAll(".lang button");
+  for (var i = 0; i < buttons.length; i++) {
+    buttons[i].addEventListener("click", function (event) {
+      var lang = event.currentTarget.getAttribute("data-set");
+      apply(lang);
+      remember(lang);
+    });
+  }
+})();
+</script>
+</body>
+</html>
