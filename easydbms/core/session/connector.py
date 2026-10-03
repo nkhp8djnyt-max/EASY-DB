@@ -19,6 +19,7 @@ from ..connections import (
     complete,
     resolve_config,
 )
+from ..connections.providers import Token, get_provider
 from ..db import (
     CheckStep,
     ConnectionCheck,
@@ -48,6 +49,17 @@ class Prepared:
     runtime: ConnectRuntime
     tunnel: SshTunnel | None = None
     steps: list[CheckStep] = field(default_factory=list)
+    #: The cloud token that ``password`` came from, and how to get a new one when it runs out.
+    token: Token | None = None
+    renew: Callable[[], Token] | None = None
+
+    def current_password(self) -> str | None:
+        """The password to connect with now: a cloud token is renewed once it is about to expire
+        (a session opens its second connection long after the first)."""
+        if self.token is not None and self.renew is not None and not self.token.valid():
+            self.token = self.renew()
+            self.password = self.token.password
+        return self.password
 
     def close(self) -> None:
         if self.tunnel is not None:
@@ -83,8 +95,33 @@ def prepare(
         report(CheckStep(name, True, detail, 0.0))
     server = completed.config
     runtime = ConnectRuntime(ssl_key_password=completed.ssl_key_password)
+    token: Token | None = None
+    renew: Callable[[], Token] | None = None
+    password = completed.password
+    if server.provider is not None and get_provider(server.provider.kind).uses_token:
+        provider = get_provider(server.provider.kind)
+        params = server.provider.params
+
+        def renew() -> Token:
+            return provider.token(server, params, environ)
+
+        started = time.perf_counter()
+        try:
+            token = renew()
+        except (DbError, ValueError) as error:
+            report(CheckStep("Cloud", False, str(error), time.perf_counter() - started))
+            raise
+        password = token.password
+        report(
+            CheckStep(
+                "Cloud",
+                True,
+                f"{provider.title} — {provider.describe(token)}",
+                time.perf_counter() - started,
+            )
+        )
     if server.ssh is None:
-        return Prepared(server, completed.password, runtime, None, steps)
+        return Prepared(server, password, runtime, None, steps, token, renew)
     if known_hosts is None:
         raise SshError("no known-hosts store is configured, so SSH servers cannot be verified")
     port = server.effective_port
@@ -101,7 +138,7 @@ def prepare(
         report(CheckStep(tunnel.stage or "SSH", False, str(error), time.perf_counter() - started))
         raise
     runtime = ConnectRuntime(Route(LOCAL_HOST, tunnel.local_port), completed.ssl_key_password)
-    return Prepared(server, completed.password, runtime, tunnel, steps)
+    return Prepared(server, password, runtime, tunnel, steps, token, renew)
 
 
 def check_connection(

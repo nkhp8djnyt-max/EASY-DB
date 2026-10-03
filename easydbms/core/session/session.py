@@ -255,7 +255,7 @@ class Session:
             assert main is not None  # a second connection would be a different, empty database
             return main
         # the second connection goes through the same tunnel, so it needs no second login
-        client = self._client_factory(config, prepared.password, prepared.runtime)
+        client = self._client_factory(config, prepared.current_password(), prepared.runtime)
         client.connect()
         with self._lock:
             if epoch != self._epoch:

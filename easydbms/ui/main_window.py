@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from PySide6.QtCore import QByteArray, Qt
-from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QKeySequence
+from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QGuiApplication, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -88,6 +88,9 @@ class MainWindow(QMainWindow):
         self._build_body()
         self.statusBar().addWidget(self._status_label, 1)
         bridge.posted.connect(self._on_event)
+        hints = QGuiApplication.styleHints()
+        if hints is not None:
+            hints.colorSchemeChanged.connect(self._on_system_scheme_changed)
         self._restore_state()
         known = {c.id for c in services.store.all()}
         services.usage_store.prune(known)
@@ -184,7 +187,11 @@ class MainWindow(QMainWindow):
 
         view_menu = self.menuBar().addMenu(tr("&View"))
         themes = QActionGroup(self)
-        for name, label in (("dark", tr("Dark theme")), ("light", tr("Light theme"))):
+        for name, label in (
+            ("system", tr("System theme")),
+            ("dark", tr("Dark theme")),
+            ("light", tr("Light theme")),
+        ):
             action = QAction(label, self, checkable=True)
             action.setChecked(self._services.settings.theme == name)
             action.triggered.connect(lambda _checked=False, n=name: self.set_theme(n))
@@ -433,16 +440,24 @@ class MainWindow(QMainWindow):
             workspace.select_all_from(table)
 
     def set_theme(self, name: str) -> None:
-        app = QApplication.instance()
-        if isinstance(app, QApplication):
-            apply_theme(app, name)
         self._services.settings.theme = name  # type: ignore[assignment]
         self._services.settings_store.save(self._services.settings)
+        self._restyle()
+
+    def _restyle(self) -> None:
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            apply_theme(app, self._services.settings.theme)
         for workspace in self._workspaces.values():
             workspace.refresh_theme()
         for pane in self._erd_panes.values():
             pane.refresh_theme()
         self._refresh()
+
+    def _on_system_scheme_changed(self, *_: object) -> None:
+        """The operating system switched between light and dark: follow it if asked to."""
+        if not self._closed and self._services.settings.theme == "system":
+            self._restyle()
 
     def set_language(self, code: str) -> None:
         self._services.settings.language = code  # type: ignore[assignment]

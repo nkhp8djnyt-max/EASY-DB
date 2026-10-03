@@ -101,6 +101,36 @@ class SshConfig(BaseModel):
     jump: SshHop | None = None
 
 
+class ProviderKind(StrEnum):
+    """Hosted database services that need more than host / user / password."""
+
+    AWS_RDS = "aws-rds"  # RDS / Aurora with IAM database authentication
+    GCP_CLOUDSQL = "gcp-cloudsql"  # Cloud SQL with IAM database authentication
+    AZURE = "azure"  # Azure Database with Microsoft Entra ID
+    SUPABASE = "supabase"
+    NEON = "neon"
+    PLANETSCALE = "planetscale"
+    COCKROACH = "cockroachdb"
+
+
+class ProviderConfig(BaseModel):
+    """Which hosted service a connection is for, and the service's own settings (region, ...).
+
+    Nothing secret lives here: the short-lived access token is created when connecting.
+    """
+
+    model_config = ConfigDict(extra="forbid", validate_assignment=True)
+
+    kind: ProviderKind
+    #: Settings named by the provider (``region``, ``profile``, ``project_ref`` ...).
+    params: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("params")
+    @classmethod
+    def _tidy(cls, value: dict[str, str]) -> dict[str, str]:
+        return {key.strip(): text.strip() for key, text in value.items() if key.strip()}
+
+
 #: Options that mean TLS settings; they are moved into :class:`SslConfig` when a config is loaded
 #: (older files and URLs carry them as plain driver options).
 _PG_SSL_KEYS = {
@@ -214,6 +244,8 @@ class ServerConnection(_ConnectionBase):
     ssl: SslConfig = Field(default_factory=SslConfig)
     #: An SSH tunnel through which the database is reached (``None``: connect directly).
     ssh: SshConfig | None = None
+    #: A hosted service (AWS RDS, Supabase, ...) the connection is for; ``None``: a plain server.
+    provider: ProviderConfig | None = None
     #: PostgreSQL: a ``[service]`` of ``pg_service.conf`` that supplies whatever is left empty here.
     service: str = ""
     #: Keep the password (and the SSH / key passphrases) in the secret store; otherwise they are

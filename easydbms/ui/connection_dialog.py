@@ -60,6 +60,7 @@ def _step_label(name: str) -> str:
         "Settings": tr("Settings"),
         "Service": tr("Service file"),
         "Password": tr("Password source"),
+        "Cloud": tr("Cloud token"),
         "SSH jump": tr("SSH jump host"),
         "SSH": tr("SSH login"),
         "Tunnel": tr("SSH tunnel"),

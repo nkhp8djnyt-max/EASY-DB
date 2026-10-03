@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ..core.connections import SecretStoreError, ServiceNotFoundError, UnresolvedVariableError
+from ..core.connections.providers import ProviderAuthError, ProviderError, ProviderUnavailable
 from ..core.db import (
     AuthFailed,
     ConnectTimeout,
@@ -29,6 +30,14 @@ from .i18n import tr
 
 def hint_for(error: BaseException | None) -> str:
     """One sentence on what to check, or an empty string when there is nothing useful to add."""
+    if isinstance(error, ProviderUnavailable):
+        return tr(
+            "Install the provider's package: pip install 'easydbms[{extra}]'", extra=error.extra
+        )
+    if isinstance(error, ProviderAuthError):
+        return tr("Sign in to the cloud account (CLI or environment variables) and try again.")
+    if isinstance(error, ProviderError):
+        return tr("Check the settings in the Cloud tab.")
     if isinstance(error, InvalidConnection):
         return hint_for(error.cause)
     if isinstance(error, DnsError):

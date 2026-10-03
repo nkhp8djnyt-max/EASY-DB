@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QGuiApplication
+from PySide6.QtWidgets import QApplication, QMenu
+from pytestqt.qtbot import QtBot
 
 from easydbms.core.connections import ConnectionColor
+from easydbms.core.storage import SettingsStore
 from easydbms.ui.theme import (
     COLOR_HEX,
     THEMES,
@@ -14,8 +19,13 @@ from easydbms.ui.theme import (
     build_stylesheet,
     color_hex,
     current_tokens,
+    resolve_theme,
+    stylesheet,
 )
 from easydbms.ui.theme.assets import check_icon_path
+
+from .conftest import Env
+from .test_main_window import make_window
 
 
 @pytest.mark.parametrize("name", ["dark", "light"])
@@ -64,3 +74,69 @@ def test_check_icon_is_generated_once(qapp: QApplication) -> None:
     first_mtime = path.stat().st_mtime_ns
     assert check_icon_path("#ffffff") == path.as_posix()
     assert path.stat().st_mtime_ns == first_mtime  # cached, not rewritten
+
+
+# ---------------------------------------------------------------------------- follow the system
+
+
+@pytest.fixture
+def system_scheme(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Callable[[Qt.ColorScheme], None]:
+    """Stand in for the operating system's setting (the offscreen platform has none)."""
+    state = {"scheme": Qt.ColorScheme.Dark}
+    monkeypatch.setattr(stylesheet, "system_color_scheme", lambda: state["scheme"])
+
+    def switch(scheme: Qt.ColorScheme) -> None:
+        state["scheme"] = scheme
+        hints = QGuiApplication.styleHints()
+        assert hints is not None
+        hints.colorSchemeChanged.emit(scheme)  # what the platform does when the user switches
+
+    return switch
+
+
+def test_system_follows_the_operating_systems_colour_scheme(
+    system_scheme: Callable[[Qt.ColorScheme], None],
+) -> None:
+    system_scheme(Qt.ColorScheme.Light)
+    assert resolve_theme("system") == "light"
+    system_scheme(Qt.ColorScheme.Dark)
+    assert resolve_theme("system") == "dark"
+    assert resolve_theme("light") == "light"
+    assert resolve_theme("dark") == "dark"
+
+
+def test_applying_the_system_theme_applies_the_resolved_one(
+    qapp: QApplication, system_scheme: Callable[[Qt.ColorScheme], None]
+) -> None:
+    system_scheme(Qt.ColorScheme.Light)
+    apply_theme(qapp, "system")
+    assert current_tokens().name == "light"
+    system_scheme(Qt.ColorScheme.Dark)
+    apply_theme(qapp, "system")
+    assert current_tokens().name == "dark"
+
+
+def test_the_window_follows_the_system_while_the_system_theme_is_chosen(
+    env: Env, qtbot: QtBot, system_scheme: Callable[[Qt.ColorScheme], None]
+) -> None:
+    system_scheme(Qt.ColorScheme.Dark)
+    window = make_window(env, qtbot)
+    window.set_theme("system")
+    assert SettingsStore(env.services.paths.settings_file).load().theme == "system"
+    assert current_tokens().name == "dark"
+    system_scheme(Qt.ColorScheme.Light)
+    qtbot.waitUntil(lambda: current_tokens().name == "light", timeout=3000)
+    window.set_theme("dark")  # an explicit choice is not overridden by the system
+    system_scheme(Qt.ColorScheme.Light)
+    system_scheme(Qt.ColorScheme.Dark)
+    assert current_tokens().name == "dark"
+    window.set_theme("dark")
+
+
+def test_the_view_menu_offers_the_system_theme(env: Env, qtbot: QtBot) -> None:
+    window = make_window(env, qtbot)
+    labels = [a.text() for m in window.menuBar().findChildren(QMenu) for a in m.actions()]
+    assert "System theme" in labels
+    assert labels.index("System theme") < labels.index("Dark theme") < labels.index("Light theme")

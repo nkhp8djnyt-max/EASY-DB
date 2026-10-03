@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QApplication
 
 from .assets import check_icon_path, close_icon_path
@@ -80,6 +82,10 @@ QTabBar::close-button:hover {{ image: url({close_icon_path(t.text)}); background
 
 QTableView {{ background-color: {t.panel}; alternate-background-color: {t.panel_alt}; gridline-color: {t.border}; color: {t.text}; selection-background-color: {t.selection}; selection-color: {t.text}; border: none; }}
 QTableView::item {{ padding: 0 6px; }}
+QTreeView {{ background-color: {t.panel}; alternate-background-color: {t.panel_alt}; color: {t.text}; selection-background-color: {t.selection}; selection-color: {t.text}; border: 1px solid {t.border}; border-radius: 6px; outline: 0; }}
+QTreeView::item {{ padding: 3px 4px; }}
+QTreeView::item:hover {{ background-color: {t.hover}; }}
+QTreeView::item:selected {{ background-color: {t.selection}; color: {t.text}; }}
 QHeaderView::section {{ background-color: {t.panel_alt}; color: {t.text_muted}; border: none; border-right: 1px solid {t.border}; border-bottom: 1px solid {t.border}; padding: 5px 8px; font-weight: 600; }}
 QTableCornerButton::section {{ background-color: {t.panel_alt}; border: none; }}
 
@@ -115,9 +121,24 @@ QProgressBar::chunk {{ background: {t.accent}; border-radius: 3px; }}
 THEME_PROPERTY = "erdTheme"
 
 
+def system_color_scheme() -> Qt.ColorScheme:
+    """What the operating system prefers (``Unknown`` where it does not say)."""
+    hints = QGuiApplication.styleHints()
+    return hints.colorScheme() if hints is not None else Qt.ColorScheme.Unknown
+
+
+def resolve_theme(name: str) -> str:
+    """``dark`` / ``light`` stay as they are; ``system`` follows the operating system's colour
+    scheme (dark when the system does not say)."""
+    if name in THEMES:
+        return name
+    return "light" if system_color_scheme() == Qt.ColorScheme.Light else "dark"
+
+
 def apply_theme(app: QApplication, name: str) -> None:
-    app.setProperty(THEME_PROPERTY, name)
-    app.setStyleSheet(build_stylesheet(THEMES[name]))
+    resolved = resolve_theme(name)
+    app.setProperty(THEME_PROPERTY, resolved)
+    app.setStyleSheet(build_stylesheet(THEMES[resolved]))
 
 
 def current_tokens() -> Tokens:

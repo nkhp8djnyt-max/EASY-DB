@@ -15,7 +15,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 class AppSettings(BaseModel):
     model_config = ConfigDict(extra="ignore", validate_assignment=True)
 
-    theme: Literal["dark", "light"] = "dark"
+    #: ``system`` follows the operating system's light / dark setting.
+    theme: Literal["dark", "light", "system"] = "dark"
     #: ``auto`` follows the system locale (Russian for ``ru*``, English otherwise).
     language: Literal["auto", "ru", "en"] = "auto"
     #: Most rows a query result keeps; the rest is cut off (and reported) to protect memory.

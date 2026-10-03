@@ -87,6 +87,16 @@ def resolve_config(
                 "key_file": expand(config.ssl.key_file, environ, missing),
             },
             "ssh": _expand_ssh(config.ssh, environ, missing),
+            "provider": (
+                {
+                    "kind": config.provider.kind,
+                    "params": {
+                        k: expand(v, environ, missing) for k, v in config.provider.params.items()
+                    },
+                }
+                if config.provider is not None
+                else None
+            ),
         }
     else:
         changes = {"path": expand(config.path, environ, missing)}

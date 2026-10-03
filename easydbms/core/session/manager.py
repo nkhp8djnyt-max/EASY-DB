@@ -26,6 +26,7 @@ from ..connections import (
     expand,
     resolve_config,
 )
+from ..connections.providers import get_provider
 from ..db import ConnectionCheck, create_client
 from ..db.tls import key_is_encrypted
 from ..dialects import DialectId
@@ -133,6 +134,7 @@ class ConnectionManager:
         if (
             not config.save_password
             and PASSWORD not in self._typed.get(connection_id, {})
+            and not _uses_token(config)
             and not _password_from_files(config, environ)
         ):
             missing.append(PASSWORD)
@@ -316,6 +318,11 @@ def _hop_secrets(
     if hop.auth is SshAuth.KEY and is_encrypted(_expanded(hop.key_file, environ)):
         return [passphrase_field]
     return []
+
+
+def _uses_token(config: ServerConnection) -> bool:
+    """Does a cloud provider create the password (so there is nothing to ask)?"""
+    return config.provider is not None and get_provider(config.provider.kind).uses_token
 
 
 def _password_from_files(config: ServerConnection, environ: Mapping[str, str]) -> bool:

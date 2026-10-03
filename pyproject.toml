@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "easydbms"
-version = "0.1.0"
+version = "0.7.0"
 description = "EasyDBMS: desktop database client with ERD, editable results and dialect-aware SQL tooling."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -27,8 +27,15 @@ dependencies = [
 gui = [
     "PySide6>=6.7",
 ]
+# cloud providers (each plugin imports its SDK only when a connection uses it)
+aws = ["boto3>=1.34"]
+azure = ["azure-identity>=1.16"]
+gcp = ["google-auth>=2.29"]
+cloud = ["boto3>=1.34", "azure-identity>=1.16", "google-auth>=2.29"]
+build = ["pyinstaller>=6.6", "pillow>=10"]
 dev = [
     "PySide6>=6.7",
+    "boto3>=1.34",
     "SQLAlchemy>=2.0",
     "pytest>=8",
     "pytest-qt>=4.4",
@@ -80,5 +87,18 @@ module = "tests.core.connections.test_secrets"
 disallow_untyped_calls = false
 
 [[tool.mypy.overrides]]
-module = ["pyarrow", "pyarrow.*", "paramiko", "paramiko.*"]
+module = [
+    "pyarrow",
+    "pyarrow.*",
+    "paramiko",
+    "paramiko.*",
+    "boto3",
+    "boto3.*",
+    "botocore",
+    "botocore.*",
+    "azure",
+    "azure.*",
+    "google",
+    "google.*",
+]
 ignore_missing_imports = true

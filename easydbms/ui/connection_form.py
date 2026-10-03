@@ -45,6 +45,7 @@ from ..core.connections import (
     parse_connection_url,
 )
 from ..core.dialects import MYSQL, POSTGRESQL, SQLITE, Dialect, DialectId
+from .connection_cloud import CloudEditor
 from .connection_security import SshEditor, SslEditor
 from .i18n import tr
 from .icons import dot_icon
@@ -87,6 +88,7 @@ class ConnectionForm(QWidget):
     def __init__(self, secret_store_name: str = "", parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._syncing = False
+        self._applied: dict[str, str] = {}
         self._build(secret_store_name)
         self._wire()
         self.load(None)
@@ -145,6 +147,8 @@ class ConnectionForm(QWidget):
         self.ssh_editor = SshEditor()
         self.tabs.addTab(self._scrolled(self.ssl_editor), tr("SSL / TLS"))
         self.tabs.addTab(self._scrolled(self.ssh_editor), tr("SSH tunnel"))
+        self.cloud_editor = CloudEditor()
+        self.tabs.addTab(self._scrolled(self.cloud_editor), tr("Cloud"))
         layout.addWidget(self.tabs)
 
         self.password_widget = QWidget()
@@ -306,6 +310,8 @@ class ConnectionForm(QWidget):
         self.service_combo.editTextChanged.connect(self._on_field_edited)
         self.ssl_editor.edited.connect(self._on_field_edited)
         self.ssh_editor.edited.connect(self._emit_changed)
+        self.cloud_editor.edited.connect(self._on_cloud_edited)
+        self.cloud_editor.chosen.connect(self._on_provider_chosen)
         self.name_edit.textEdited.connect(self._emit_changed)
         self.group_combo.editTextChanged.connect(self._emit_changed)
         self.color_combo.currentIndexChanged.connect(self._emit_changed)
@@ -391,6 +397,7 @@ class ConnectionForm(QWidget):
                 self.service_combo.setEditText("")
                 self.ssl_editor.load(SslConfig())
                 self.ssh_editor.load(None)
+                self.cloud_editor.load(None)
             else:
                 dialect_id = config.dialect if config else DialectId.POSTGRESQL
                 self._select_dialect(DialectId(dialect_id))
@@ -409,6 +416,7 @@ class ConnectionForm(QWidget):
                     saved_key_password=SSL_KEY_PASSWORD in saved_secrets,
                 )
                 self.ssh_editor.load(config.ssh if config else None, saved=saved_secrets)
+                self.cloud_editor.load(config.provider if config else None)
             self._apply_dialect_ui()
             self.password_edit.setPlaceholderText(
                 tr("A saved password is used. Type to replace it.") if has_saved_password else ""
@@ -477,6 +485,7 @@ class ConnectionForm(QWidget):
             else "",
             "ssl": self.ssl_editor.read(),
             "ssh": self.ssh_editor.read(),
+            "provider": self.cloud_editor.read(),
         }
 
     def _draft(self) -> ServerConnection | FileConnection | None:
@@ -496,13 +505,15 @@ class ConnectionForm(QWidget):
         is_file = dialect.file_based
         self.stack.setCurrentIndex(1 if is_file else 0)
         self.tabs.setTabText(1, tr("File") if is_file else tr("Host / Port"))
-        self.password_widget.setVisible(not is_file)
+        self.password_widget.setVisible(not is_file and not self.cloud_editor.uses_token)
         is_postgres = self.dialect_id is DialectId.POSTGRESQL
         for widget in (self.service_label, self.service_combo, self.pgpass_hint):
             widget.setVisible(is_postgres)
         self.tabs.setTabVisible(2, not is_file)
         self.tabs.setTabVisible(3, not is_file)
+        self.tabs.setTabVisible(4, not is_file)
         self.ssl_editor.set_dialect(self.dialect_id)
+        self.cloud_editor.set_dialect(self.dialect_id)
         if not is_file and dialect.default_port is not None:
             self.port_spin.setSpecialValueText(tr("default ({port})", port=dialect.default_port))
         self.url_edit.setPlaceholderText(
@@ -534,6 +545,59 @@ class ConnectionForm(QWidget):
         self._refresh_pgpass_hint()
         self.url_error.hide()
         self.changed.emit()
+
+    def _on_cloud_edited(self) -> None:
+        if self._syncing:
+            return
+        self._apply_provider_defaults(replace_host=True)
+        self.password_widget.setVisible(
+            self.dialect_id is not DialectId.SQLITE and not self.cloud_editor.uses_token
+        )
+        self.changed.emit()
+
+    def _on_provider_chosen(self, _kind: str) -> None:
+        """A hosted service was picked: fill what its documentation prescribes."""
+        if self._syncing:
+            return
+        self._applied.clear()
+        self._apply_provider_defaults(replace_host=False)
+        self._apply_dialect_ui()
+        self._refresh_url()
+
+    def _apply_provider_defaults(self, *, replace_host: bool = False) -> None:
+        """Put the provider's defaults into fields the person has not filled in yet."""
+        provider = self.cloud_editor.provider
+        if provider is None:
+            return
+        defaults = provider.defaults(self.cloud_editor.params, self.dialect_id)
+        self._syncing = True
+        try:
+            if defaults.dialect is not None and defaults.dialect is not self.dialect_id:
+                self._select_dialect(defaults.dialect)
+                self._apply_dialect_ui()
+            for key, value, edit in (
+                ("host", defaults.host, self.host_edit),
+                ("user", defaults.user, self.user_edit),
+                ("database", defaults.database, self.database_edit),
+            ):
+                typed = edit.text().strip()
+                # an empty field is filled; one this method filled before follows the settings
+                if value and (
+                    not typed
+                    or (key == "host" and typed == "localhost")
+                    or typed == self._applied.get(key)
+                ):
+                    edit.setText(value)
+                    self._applied[key] = value
+            if defaults.port and not self.port_spin.value():
+                self.port_spin.setValue(defaults.port)
+            if defaults.ssl_mode is not None and self.ssl_editor.mode is None:
+                index = self.ssl_editor.mode_combo.findData(defaults.ssl_mode.value)
+                self.ssl_editor.mode_combo.setCurrentIndex(max(0, index))
+        finally:
+            self._syncing = False
+        self._refresh_url()
+        self._refresh_pgpass_hint()
 
     def _fill_services(self) -> None:
         """Offer the services found in ``pg_service.conf`` (the box stays free text)."""

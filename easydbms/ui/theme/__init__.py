@@ -1,7 +1,13 @@
 """Colour tokens and the application stylesheet, dark by default."""
 
 from .palette import COLOR_HEX, SYNTAX, THEMES, SyntaxColors, Tokens, color_hex
-from .stylesheet import apply_theme, build_stylesheet, current_syntax, current_tokens
+from .stylesheet import (
+    apply_theme,
+    build_stylesheet,
+    current_syntax,
+    current_tokens,
+    resolve_theme,
+)
 
 __all__ = [
     "COLOR_HEX",
@@ -14,4 +20,5 @@ __all__ = [
     "color_hex",
     "current_syntax",
     "current_tokens",
+    "resolve_theme",
 ]

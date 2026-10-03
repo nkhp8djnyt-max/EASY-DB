@@ -60,7 +60,19 @@ def test_translations_keep_the_same_placeholders() -> None:
 
 
 def test_translations_are_not_empty_or_identical_by_accident() -> None:
-    technical = {"URL", "PRODUCTION", "SSL / TLS", "ssh-agent"}  # same in both languages on purpose
+    technical = {
+        "URL",
+        "PRODUCTION",
+        "SSL / TLS",
+        "ssh-agent",
+        "Supabase",
+        "Neon",
+        "PlanetScale",
+        "CockroachDB Cloud",
+        "AWS RDS / Aurora (IAM)",
+        "Google Cloud SQL (IAM)",
+        "Azure Database (Microsoft Entra ID)",
+    }  # same in both languages on purpose
     for english, russian in RU.items():
         assert russian.strip(), english
         if english not in technical:

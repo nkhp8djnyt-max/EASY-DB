@@ -7,9 +7,11 @@ import sys
 from PySide6.QtCore import QLocale
 from PySide6.QtWidgets import QApplication
 
+from . import __version__
 from .core.paths import AppPaths
 from .core.services import build_services
 from .ui.i18n import resolve_language, set_language
+from .ui.icons import app_icon
 from .ui.main_window import APP_TITLE, MainWindow
 from .ui.runtime import BackgroundRunner, EventBridge
 from .ui.theme import apply_theme
@@ -25,8 +27,13 @@ def build_window(app: QApplication, paths: AppPaths | None = None) -> MainWindow
 
 
 def main(argv: list[str] | None = None) -> int:
-    app = QApplication(sys.argv if argv is None else argv)
+    arguments = sys.argv if argv is None else argv
+    if "--version" in arguments[1:]:
+        print(f"{APP_TITLE} {__version__}")  # before Qt starts: works without a display
+        return 0
+    app = QApplication(arguments)
     app.setApplicationName(APP_TITLE)
+    app.setWindowIcon(app_icon())
     window = build_window(app)
     window.show()
     window.show_startup_notices()

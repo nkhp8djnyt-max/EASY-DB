@@ -1,0 +1,35 @@
+name: CI
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: {POSTGRES_USER: erd, POSTGRES_PASSWORD: erd, POSTGRES_DB: erd_test}
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U erd" --health-interval 5s --health-timeout 5s --health-retries 10
+      mariadb:
+        image: mariadb:11
+        env: {MARIADB_USER: erd, MARIADB_PASSWORD: erd, MARIADB_DATABASE: erd_test, MARIADB_ROOT_PASSWORD: root}
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      EASYDBMS_TEST_POSTGRES_URL: postgresql+psycopg://erd:erd@127.0.0.1:5432/erd_test
+      EASYDBMS_TEST_MYSQL_URL: mysql+pymysql://erd:erd@127.0.0.1:3306/erd_test
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: Qt runtime libraries
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3
+      - run: pip install -e ".[dev]"
+      - run: ruff check . && ruff format --check .
+      - run: mypy
+      - run: pytest -q

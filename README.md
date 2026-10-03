@@ -4,11 +4,17 @@ Desktop database client in Python: SQL editor, ERD, editable result grid. Suppor
 dialects: **PostgreSQL**, **MySQL** (including MariaDB) and **SQLite**. Corporate dialects
 (SQL Server, Oracle) are intentionally out of scope.
 
-**Status: stage 6 of 7 — secure connections.** Everything from before (SQL editor with autocomplete, ER diagram,
-editable grid) now also works **through SSL/TLS, an SSH tunnel (with a jump host) and the PostgreSQL
-`~/.pgpass` / `pg_service.conf` files**. *Test connection* walks the whole path — service file, password source,
-SSH jump host, SSH login, tunnel, TLS files, encryption, login, test query — and says which step broke and why.
-Cloud providers, history and packaging are the last stage (see [Roadmap](#roadmap)).
+**Status: stage 7 of 7 — the full set.** Everything from the earlier stages (connections with SSL / SSH / `~/.pgpass`,
+SQL editor with autocomplete, ER diagram, editable grid) plus: a **history of every statement you ran** and
+**saved queries** in folders, **diagram export** (PNG / SVG / PDF, and Mermaid / DBML text), **cloud providers**
+(AWS RDS / Aurora IAM, Google Cloud SQL IAM, Azure Entra ID, templates for Supabase, Neon, PlanetScale and
+CockroachDB Cloud), a **follow-the-system theme** and a **PyInstaller build** with a CI workflow.
+
+| History of what you ran | Saved queries in folders | A hosted service fills the form |
+|---|---|---|
+| ![](docs/screenshots/stage7-history.png) | ![](docs/screenshots/stage7-saved.png) | ![](docs/screenshots/stage7-cloud.png) |
+
+The diagram, exported as a PNG by *Database → Export diagram…* (`Ctrl+E`): [stage7-erd-export.png](docs/screenshots/stage7-erd-export.png).
 
 | TLS: modes and certificate files | SSH tunnel with a jump host | A test through the tunnel |
 |---|---|---|
@@ -66,6 +72,43 @@ import simd; print(simd.status())"` shows what is active.
 Config lives in the per-user config directory (`connections.json`, `settings.toml`, `vault.json`)
 and data in the per-user data directory (`app.db`). Set `EASYDBMS_HOME=/some/dir` to keep
 everything in one place (portable installs, experiments).
+
+## What stage 7 does
+
+- **History** (`Ctrl+H`). Every statement that runs, fails or is cancelled is kept in `app.db` (migration 6) with its
+  time, duration, rows and the error text; running the same statement again right after itself updates the entry
+  and counts the run (`×3`) instead of adding a line. Newest first, per connection, at most 5000 per connection.
+  Search is literal and case-insensitive (`%` and `_` are not wildcards), *Only failures* narrows the list; an entry
+  opens in a new tab, is inserted at the cursor, copied, saved as a query, or deleted; *Clear history…* asks first.
+  Deleting a connection forgets its history.
+- **Saved queries** (`Ctrl+S` saves the selection, or the whole editor; `Ctrl+Shift+H` browses them). A name, an
+  optional folder (`Reports/Monthly`), and a scope: *Only for this connection* or available on every connection.
+  Rename, move to another folder, open in a new tab, insert, delete; search looks at names and SQL text.
+- **Diagram export** (`Ctrl+E`, or the ⤓ button above the diagram). PNG (2× scale, large diagrams are scaled down to
+  16000 px), **SVG** (vector, text stays text), **PDF** (one page the size of the diagram) — rendered from the scene
+  exactly as filtered (hidden cards stay out; the selection outline and dimming are not drawn). **Mermaid**
+  `erDiagram` and **DBML** are written from the ER model: tables, columns with PK / FK flags, nullable foreign keys
+  as optional relations, unique foreign keys as 1:1, schema-qualified names when several schemas are shown, awkward
+  identifiers and types made safe.
+- **Cloud providers** (the *Cloud* tab). Pick a service and the form fills in what its documentation prescribes
+  (only into fields you have not filled — what you typed is never overwritten):
+  - **AWS RDS / Aurora (IAM)**, **Google Cloud SQL (IAM)**, **Azure Database (Entra ID)** — no password: a short-lived
+    token is created every time a connection opens (RDS: a presigned request signed locally from the standard AWS
+    credential chain, valid 15 min; Entra: `azure-identity`; Google: OAuth access token from Application Default
+    Credentials or a service-account key file) and shown as the `Cloud token` step of the connection test. A session's
+    second connection renews the token if the first one is about to expire. The SDKs are optional extras
+    (`pip install 'easydbms[aws]'`, `[azure]`, `[gcp]`, `[cloud]`); without one the test says which to install.
+    Google Cloud SQL connects to the instance IP or a running Cloud SQL Auth Proxy — the `cloud-sql-python-connector`
+    itself is not embedded.
+  - **Supabase** (host from the project reference), **Neon**, **PlanetScale** (MySQL, verified TLS), **CockroachDB
+    Cloud** (port 26257, the cluster name in front of the database name) — templates for host, port, database, TLS
+    mode and a hint; the password is an ordinary saved secret.
+- **Themes.** *View → System theme* follows the operating system's light / dark setting and switches live when it
+  changes; the explicit dark and light themes stay.
+- **Packaging.** `python scripts/build_app.py [--check]` runs PyInstaller with `packaging/easydbms.spec` (windowed
+  one-folder app, `EasyDBMS.app` on macOS, the C accelerator and the cloud SDKs bundled when present);
+  `easydbms --version` works without a display. `.github/workflows/ci.yml` runs lint, mypy and the whole suite against
+  PostgreSQL and MariaDB service containers; `.github/workflows/build.yml` builds Linux / Windows / macOS artifacts.
 
 ## What stage 6 does
 
@@ -380,15 +423,17 @@ easydbms/
 │  ├─ dialects/             # PostgreSQL / MySQL / SQLite: quoting, literals, lexer, splitter,
 │  │                        #   formatter, translator, vocabulary, type classification
 │  ├─ db/                   # DatabaseClient + PostgresClient, MySqlClient, SqliteClient, errors, TLS files / driver mapping
-│  ├─ connections/          # ConnectionConfig (+ SSL / SSH settings), URL parser, ${ENV}, secret stores, store,
+│  ├─ connections/          # ConnectionConfig (+ SSL / SSH / provider settings), URL parser, ${ENV}, secret stores, store,
+│  │  └─ providers/         #   AWS RDS / Cloud SQL / Azure token plugins, Supabase / Neon / PlanetScale / CockroachDB templates
 │  │                        #   ~/.pgpass + pg_service.conf, `complete()` (service / password sources)
 │  ├─ ssh/                  # SshTunnel (paramiko; password / key / agent, jump host), known_hosts trust
 │  ├─ session/              # Session (query lane + meta lane, schema events), ConnectionManager,
 │  │                        #   connector (prepare = service + secrets + tunnel; check_connection)
 │  ├─ schema/               # Table / Column / ForeignKey / Index model + per-dialect introspection
-│  ├─ erd/                  # relations, cardinality, layered layout, edge routing, saved positions
+│  ├─ erd/                  # relations, cardinality, layered layout, edge routing, saved positions,
+│  │                        #   Mermaid / DBML export
 │  ├─ browse/               # SQL for paging, sorting and filtering a table
-│  ├─ queries/              # query tabs, danger guard, script job
+│  ├─ queries/              # query tabs, danger guard, script job, history, saved queries
 │  ├─ autocomplete/         # cursor context, candidates + ranking, snippets, usage counts
 │  ├─ editing/              # change set (undo/redo), value parsing, UPDATE/INSERT/DELETE builder, targets
 │  ├─ simd/                 # optional C extension: AVX2/SSE2 scanner + statement splitter
@@ -479,6 +524,14 @@ Without those variables the server cases are skipped. GUI tests use `pytest-qt` 
 `offscreen` platform; on a bare Linux box Qt needs `libegl1 libgl1 libxkbcommon0 libfontconfig1
 libdbus-1-3` installed.
 
+### Packaging
+
+```bash
+uv pip install -e ".[dev,build]"        # + ".[cloud]" to bundle the AWS / Azure / Google SDKs
+python scripts/make_icon.py             # packaging/icon.png and icon.ico from the painted icon (already committed)
+python scripts/build_app.py --check     # dist/EasyDBMS/ and a --version smoke test
+```
+
 ### Testing TLS and SSH
 
 `tests/support/` holds an in-process SSH server, ssh-agent and a throw-away PKI, so the SSH tunnel and TLS-file tests
@@ -505,4 +558,4 @@ MariaDB: `ssl_ca` / `ssl_cert` / `ssl_key` in `[mysqld]` and `CREATE USER erd_ce
 4. ✅ **Autocomplete** (keywords → tables → columns → aliases → JOIN by FK), snippets, usage ranking.
 5. ✅ **Editable grid**: change set, review (Alt+S), one transaction, optimistic locking, key columns.
 6. ✅ **SSL / TLS, SSH tunnel** (password / key / agent, jump host, host-key trust), **`~/.pgpass`** and **`pg_service.conf`**.
-7. Cloud providers, history and saved queries, ERD export, packaging.
+7. ✅ **Cloud providers**, **history and saved queries**, **diagram export** (PNG / SVG / PDF / Mermaid / DBML), **system theme**, **packaging** (PyInstaller + CI).

@@ -53,6 +53,7 @@ def test_the_new_tabs_exist_for_servers_and_not_for_files(form: ConnectionForm) 
         "Host / Port",
         "SSL / TLS",
         "SSH tunnel",
+        "Cloud",
     ]
     assert form.tabs.isTabVisible(2)
     assert form.tabs.isTabVisible(3)
