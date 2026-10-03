@@ -37,8 +37,11 @@ from ..core.dialects import (
 )
 from ..core.editing import EditKeyStore
 from ..core.queries import (
+    HistoryOutcome,
+    HistoryStore,
     Outcome,
     QueryTabStore,
+    SavedQueryStore,
     ScriptRun,
     StatementOutcome,
     TabState,
@@ -51,6 +54,7 @@ from ..core.session import Session
 from .connection_form import DIALECT_LABELS
 from .editor import CompletionSource, SqlEditor
 from .i18n import tr
+from .library import LibraryDialog, SaveQueryDialog
 from .results import EditingContext, ResultsPanel, TableTab
 
 _SAVE_DELAY_MS = 600
@@ -97,9 +101,14 @@ class QueryWorkspace(QWidget):
         usage: UsageStore | None = None,
         keyword_case: Callable[[], str] | None = None,
         edit_keys: EditKeyStore | None = None,
+        history: HistoryStore | None = None,
+        saved: SavedQueryStore | None = None,
     ) -> None:
         super().__init__(parent)
         self._config = config
+        self._history = history
+        self._saved = saved
+        self._library: LibraryDialog | None = None
         self._tab_store = tab_store
         self._row_limit = row_limit
         self._usage = usage
@@ -394,6 +403,8 @@ class QueryWorkspace(QWidget):
             if tab.run is not None:
                 tab.run.cancel()
         self._clock.stop()
+        if self._library is not None:
+            self._library.close()
         self._completion_pool.shutdown(wait=False, cancel_futures=True)
         self.flush()
 
@@ -496,8 +507,34 @@ class QueryWorkspace(QWidget):
         self._finished.emit(tab, future)
 
     def _on_outcome(self, tab: QueryTab, index: int, outcome: StatementOutcome) -> None:
+        self._remember(tab, outcome)
         if tab.alive:
             tab.results.add_outcome(outcome)
+
+    def _remember(self, tab: QueryTab, outcome: StatementOutcome) -> None:
+        """Put a statement that ran (or failed, or was cancelled) into the history."""
+        if self._history is None or outcome.outcome is Outcome.SKIPPED:
+            return
+        kind = {
+            Outcome.OK: HistoryOutcome.OK,
+            Outcome.ERROR: HistoryOutcome.ERROR,
+            Outcome.CANCELLED: HistoryOutcome.CANCELLED,
+        }[outcome.outcome]
+        result = outcome.result
+        rows = None
+        if result is not None:
+            rows = len(result.rows) if result.returns_rows else result.rowcount
+        self._history.record(
+            self._config.id,
+            outcome.statement.body,
+            tab.editor.dialect.id.value,
+            duration=outcome.duration,
+            outcome=kind,
+            row_count=rows,
+            error=str(outcome.error) if outcome.error is not None else "",
+        )
+        if self._library is not None and self._library.isVisible():
+            self._library.refresh_history()
 
     def _on_finished(self, tab: QueryTab, future: Future[list[StatementOutcome]]) -> None:
         if not tab.alive:
@@ -531,6 +568,56 @@ class QueryWorkspace(QWidget):
             self.status.setText(
                 tr("Running… {time}", time=_seconds(time.perf_counter() - tab.started))
             )
+
+    # ------------------------------------------------------------------ history and saved queries
+
+    @property
+    def has_library(self) -> bool:
+        return self._history is not None and self._saved is not None
+
+    def show_library(self, which: str = "history") -> LibraryDialog | None:
+        """Open the history / saved-queries window (``which``: ``"history"`` or ``"saved"``)."""
+        if self._history is None or self._saved is None:
+            return None
+        if self._library is None:
+            self._library = LibraryDialog(
+                self._history, self._saved, self._config.id, self._config.name, self
+            )
+            self._library.openRequested.connect(self._open_from_library)
+            self._library.insertRequested.connect(self.insert_text)
+        self._library.refresh()
+        self._library.show_tab(which)
+        return self._library
+
+    def _open_from_library(self, sql: str, title: str, dialect_id: str) -> None:
+        self.new_tab(title.strip() or None, sql, get_dialect(dialect_id))
+
+    def save_current_query(self) -> None:
+        """Keep the selection (or the whole editor) as a named query."""
+        tab = self.current_tab()
+        if tab is None or self._saved is None:
+            return
+        editor = tab.editor
+        cursor = editor.textCursor()
+        sql = editor._selected_text(cursor) if cursor.hasSelection() else editor.text()
+        if not sql.strip():
+            self._say(tr("There is nothing to save."))
+            return
+        dialog = SaveQueryDialog(
+            sql, self._saved.folders(self._config.id), name=tab.title, parent=self
+        )
+        if not dialog.exec():
+            return
+        self._saved.add(
+            dialog.name,
+            sql,
+            editor.dialect.id.value,
+            folder=dialog.folder,
+            connection_id=self._config.id if dialog.only_this_connection else "",
+        )
+        self._say(tr("Saved the query “{name}”.", name=dialog.name))
+        if self._library is not None and self._library.isVisible():
+            self._library.refresh_saved()
 
     # ------------------------------------------------------------------ format
 

@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import re
+
 from PySide6.QtCore import QPoint, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QGuiApplication
 from PySide6.QtWidgets import (
     QComboBox,
+    QFileDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMenu,
+    QMessageBox,
     QPushButton,
     QStackedWidget,
     QToolButton,
@@ -23,6 +27,7 @@ from ...core.session import SchemaState, Session
 from ...core.storage import AppDatabase
 from ..i18n import tr
 from ..theme import current_tokens
+from .export import ExportFormat, export_diagram, file_filters, format_for_path
 from .scene import ErdScene
 from .view import ErdView
 
@@ -37,6 +42,8 @@ class ErdPane(QWidget):
     insertRequested = Signal(str)
     #: Put ``SELECT * FROM <table>`` into the editor.
     selectStarRequested = Signal(object)
+    #: The diagram was written to this path.
+    exported = Signal(str)
 
     def __init__(
         self,
@@ -86,10 +93,15 @@ class ErdPane(QWidget):
         self.refresh_button.clicked.connect(self.reload)
         self.reset_button = self._tool_button("⟲", tr("Reset the card layout"))
         self.reset_button.clicked.connect(self.reset_layout)
+        self.export_button = self._tool_button(
+            "⤓", tr("Export the diagram as an image, PDF or text…")
+        )
+        self.export_button.clicked.connect(self.export_dialog)
         bar.addWidget(self.search, 1)
         bar.addWidget(self.scope_combo)
         bar.addWidget(self.refresh_button)
         bar.addWidget(self.reset_button)
+        bar.addWidget(self.export_button)
         layout.addLayout(bar)
 
         self.stack = QStackedWidget()
@@ -270,6 +282,43 @@ class ErdPane(QWidget):
 
     def refresh_theme(self) -> None:
         self.scene.set_tokens(current_tokens())
+
+    # ------------------------------------------------------------------ export
+
+    def export_to(self, path: str, fmt: ExportFormat | None = None) -> ExportFormat:
+        """Write the diagram (as it is filtered now) to ``path``; see :func:`export_diagram`."""
+        written = export_diagram(self.scene, path, fmt)
+        self.exported.emit(path)
+        return written
+
+    def export_dialog(self) -> str | None:
+        """Ask where to save the diagram and in which format, then write it."""
+        if self.stack.currentWidget() is not self.view or not self.scene.cards():
+            QMessageBox.information(
+                self, tr("Export the diagram"), tr("There is no diagram to export yet.")
+            )
+            return None
+        filters = file_filters()
+        name = re.sub(r"[^\w.-]+", "-", self._session.config.name).strip("-") or "diagram"
+        start = f"{name}-diagram"
+        path, chosen = QFileDialog.getSaveFileName(
+            self,
+            tr("Export the diagram"),
+            start,
+            ";;".join(label for _fmt, label in filters),
+        )
+        if not path:
+            return None
+        fmt = format_for_path(path)
+        if fmt is None:  # no known suffix typed: take it from the filter that was selected
+            fmt = next((f for f, label in filters if label == chosen), ExportFormat.PNG)
+            path += fmt.suffix
+        try:
+            self.export_to(path, fmt)
+        except (OSError, ValueError) as error:
+            QMessageBox.warning(self, tr("Export the diagram"), str(error))
+            return None
+        return path
 
     def _remember_positions(self, moved: object) -> None:
         if isinstance(moved, dict):

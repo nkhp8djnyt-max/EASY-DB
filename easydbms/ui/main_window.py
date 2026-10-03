@@ -122,6 +122,16 @@ class MainWindow(QMainWindow):
             action.triggered.connect(lambda _checked=False, h=handler: self._with_workspace(h))
             query_menu.addAction(action)
         query_menu.addSeparator()
+        for text, shortcut, handler in (
+            (tr("&Save query…"), "Ctrl+S", lambda w: w.save_current_query()),
+            (tr("&History…"), "Ctrl+H", lambda w: w.show_library("history")),
+            (tr("Sa&ved queries…"), "Ctrl+Shift+H", lambda w: w.show_library("saved")),
+        ):
+            action = QAction(text, self)
+            action.setShortcut(QKeySequence(shortcut))
+            action.triggered.connect(lambda _checked=False, h=handler: self._with_workspace(h))
+            query_menu.addAction(action)
+        query_menu.addSeparator()
         apply_action = QAction(tr("Apply &changes"), self)
         apply_action.setShortcut(QKeySequence("Alt+S"))
         apply_action.triggered.connect(lambda: self._with_workspace(lambda w: w.apply_changes()))
@@ -157,6 +167,7 @@ class MainWindow(QMainWindow):
             (tr("&Refresh structure"), "Ctrl+Shift+R", self.refresh_schema),
             (tr("&Fit diagram"), "", self.fit_diagram),
             (tr("&Reset diagram layout"), "", self.reset_diagram),
+            (tr("&Export diagram…"), "Ctrl+E", self.export_diagram),
         ):
             db_action = QAction(label, self)
             if keys:
@@ -381,6 +392,11 @@ class MainWindow(QMainWindow):
         if pane is not None:
             pane.view.fit_all()
 
+    def export_diagram(self) -> None:
+        pane = self.current_pane()
+        if pane is not None:
+            pane.export_dialog()
+
     def reset_diagram(self) -> None:
         pane = self.current_pane()
         if pane is not None:
@@ -488,6 +504,8 @@ class MainWindow(QMainWindow):
                 usage=self._services.usage_store,
                 keyword_case=lambda: self._services.settings.keyword_case,
                 edit_keys=self._services.edit_keys,
+                history=self._services.history,
+                saved=self._services.saved,
             )
             self._workspaces[session.id] = workspace
             self.workspaces.addWidget(workspace)
@@ -502,6 +520,9 @@ class MainWindow(QMainWindow):
             pane.tableOpenRequested.connect(lambda t, c=connection_id: self._open_table(c, t))
             pane.insertRequested.connect(lambda text, c=connection_id: self._insert_text(c, text))
             pane.selectStarRequested.connect(lambda t, c=connection_id: self._select_all_from(c, t))
+            pane.exported.connect(
+                lambda path: self._status_label.setText(tr("Diagram saved to {path}", path=path))
+            )
             self._erd_panes[session.id] = pane
             self.erd_stack.addWidget(pane)
         else:
@@ -519,6 +540,8 @@ class MainWindow(QMainWindow):
             self._services.erd_store.forget(connection_id)
             self._services.usage_store.forget(connection_id)
             self._services.edit_keys.forget(connection_id)
+            self._services.history.forget(connection_id)
+            self._services.saved.forget(connection_id)
             pane = self._erd_panes.pop(connection_id, None)
             if pane is not None:
                 self.erd_stack.removeWidget(pane)

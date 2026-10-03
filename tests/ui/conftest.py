@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import sqlite3
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
@@ -28,6 +29,7 @@ from easydbms.ui.results.dialogs import KeyDialog, PreviewDialog, TextDialog
 from easydbms.ui.runtime import BackgroundRunner, EventBridge
 from easydbms.ui.session_panel import SessionPanel
 from easydbms.ui.theme import apply_theme, current_tokens
+from easydbms.ui.workspace import QueryWorkspace
 
 
 @dataclass
@@ -75,6 +77,11 @@ def env(qapp: QApplication, tmp_path: Path) -> Iterator[Env]:
     )
     runner = BackgroundRunner()
     yield Env(services, bridge, runner, secrets, tmp_path)
+    for widget in QApplication.allWidgets():  # a debounce timer must not outlive app.db
+        if isinstance(widget, QueryWorkspace):
+            # RuntimeError: the C++ object is gone; ProgrammingError: its app.db was closed
+            with contextlib.suppress(RuntimeError, sqlite3.ProgrammingError):
+                widget.shutdown()
     runner.shutdown()
     services.close()
 

@@ -10,7 +10,7 @@ from .connections import ConnectionStore, SecretStore, choose_secret_store
 from .editing import EditKeyStore
 from .erd import ErdLayoutStore
 from .paths import AppPaths
-from .queries import QueryTabStore
+from .queries import HistoryStore, QueryTabStore, SavedQueryStore
 from .session import ConnectionManager, ManagerEvent
 from .ssh import KnownHosts
 from .storage import AppDatabase, AppSettings, SettingsStore
@@ -29,6 +29,8 @@ class Services:
     erd_store: ErdLayoutStore
     usage_store: UsageStore
     edit_keys: EditKeyStore
+    history: HistoryStore
+    saved: SavedQueryStore
 
     def close(self) -> None:
         self.manager.close_all()
@@ -67,4 +69,6 @@ def build_services(
         erd_store=ErdLayoutStore(db),
         usage_store=UsageStore(db),
         edit_keys=EditKeyStore(db),
+        history=HistoryStore(db),
+        saved=SavedQueryStore(db),
     )

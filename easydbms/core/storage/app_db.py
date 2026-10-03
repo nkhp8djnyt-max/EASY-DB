@@ -82,6 +82,33 @@ MIGRATIONS: tuple[Migration, ...] = (
             " PRIMARY KEY (connection_id, schema, name))",
         ),
     ),
+    Migration(
+        6,
+        "history of executed statements and the user's saved queries",
+        (
+            "CREATE TABLE query_history ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " connection_id TEXT NOT NULL,"
+            " sql TEXT NOT NULL,"
+            " dialect TEXT NOT NULL,"
+            " executed_at REAL NOT NULL,"
+            " duration REAL NOT NULL,"
+            " outcome TEXT NOT NULL,"
+            " row_count INTEGER,"
+            " error TEXT NOT NULL DEFAULT '',"
+            " runs INTEGER NOT NULL DEFAULT 1)",
+            "CREATE INDEX query_history_connection ON query_history (connection_id, executed_at)",
+            "CREATE TABLE saved_queries ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " name TEXT NOT NULL,"
+            " folder TEXT NOT NULL DEFAULT '',"
+            " sql TEXT NOT NULL,"
+            " dialect TEXT NOT NULL,"
+            " connection_id TEXT NOT NULL DEFAULT '',"
+            " created_at REAL NOT NULL,"
+            " updated_at REAL NOT NULL)",
+        ),
+    ),
 )
 
 

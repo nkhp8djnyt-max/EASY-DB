@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from collections.abc import Callable, Sequence
 from concurrent.futures import Future
 from dataclasses import dataclass
@@ -25,6 +26,8 @@ class StatementOutcome:
     outcome: Outcome
     result: QueryResult | None = None
     error: DbError | None = None
+    #: Wall-clock seconds the statement took (0 for statements that never ran).
+    duration: float = 0.0
 
 
 class ScriptRun:
@@ -77,13 +80,18 @@ class ScriptRun:
     def _run_one(self, statement: Statement) -> StatementOutcome:
         if self._stop.is_set():
             return StatementOutcome(statement, Outcome.CANCELLED)
+        started = time.perf_counter()
         try:
             result = self._client.execute(statement.body, max_rows=self._row_limit)
         except QueryCancelled as error:
-            return StatementOutcome(statement, Outcome.CANCELLED, error=error)
+            return StatementOutcome(
+                statement, Outcome.CANCELLED, error=error, duration=time.perf_counter() - started
+            )
         except DbError as error:
-            return StatementOutcome(statement, Outcome.ERROR, error=error)
-        return StatementOutcome(statement, Outcome.OK, result=result)
+            return StatementOutcome(
+                statement, Outcome.ERROR, error=error, duration=time.perf_counter() - started
+            )
+        return StatementOutcome(statement, Outcome.OK, result=result, duration=result.duration)
 
     def _emit(self, index: int, outcome: StatementOutcome) -> None:
         if self._on_outcome is not None:
