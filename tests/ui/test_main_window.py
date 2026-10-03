@@ -254,8 +254,8 @@ def test_changing_the_language_persists_it_and_explains_the_restart(
     env: Env, qtbot: QtBot, prompts: Prompts
 ) -> None:
     window = make_window(env, qtbot)
-    window.set_language("ru")
-    assert SettingsStore(env.services.paths.settings_file).load().language == "ru"
+    window.set_language("uk")
+    assert SettingsStore(env.services.paths.settings_file).load().language == "uk"
     assert prompts.messages
     assert "next time" in prompts.messages[0][1]
 

@@ -21,14 +21,14 @@ The diagram, exported as a PNG by *Database → Export diagram…* (`Ctrl+E`): [
 | ![](docs/screenshots/stage6-ssl.png) | ![](docs/screenshots/stage6-ssh.png) | ![](docs/screenshots/stage6-tunnel-test.png) |
 
 More: [an SSH server nobody trusted yet — fingerprint and a *Trust this server…* button](docs/screenshots/stage6-trust.png),
-[light theme, Russian UI](docs/screenshots/stage6-ssh-light-ru.png).
+[light theme, Ukrainian UI](docs/screenshots/stage6-ssh-light-uk.png).
 
 | Pending changes | Review before writing | Someone else changed the row |
 |---|---|---|
 | ![](docs/screenshots/stage5-pending.png) | ![](docs/screenshots/stage5-review.png) | ![](docs/screenshots/stage5-conflict.png) |
 
 More: [a join result is read-only, and says why](docs/screenshots/stage5-readonly.png),
-[light theme, Russian UI](docs/screenshots/stage5-pending-light-ru.png).
+[light theme, Ukrainian UI](docs/screenshots/stage5-pending-light-uk.png).
 
 | Tables after `FROM` | Columns of an alias | Join condition from the foreign key |
 |---|---|---|
@@ -36,7 +36,7 @@ More: [a join result is read-only, and says why](docs/screenshots/stage5-readonl
 
 More: [snippets and keywords](docs/screenshots/stage4-snippets.png),
 [expand `*`](docs/screenshots/stage4-star.png),
-[light theme, Russian UI](docs/screenshots/stage4-light-ru.png).
+[light theme, Ukrainian UI](docs/screenshots/stage4-light-uk.png).
 
 | The diagram | Select a table | Table data |
 |---|---|---|
@@ -412,7 +412,7 @@ The benchmark is repeated at the end of every stage; see [`benchmarks/README.md`
 - **Read-only connections** switch the session to read-only after connecting.
 - **Lazy, parallel sessions.** Picking a connection in the switcher connects in the background;
   several stay open; the UI never blocks.
-- **Dark and light themes**, **Russian and English** UI (follows the system; a language change applies on the next start).
+- **Dark and light themes**, **Ukrainian and English** UI (follows the system; a language change applies on the next start).
 - Window size and splitter position are remembered.
 
 ## Layout
@@ -478,7 +478,7 @@ Dependencies point one way: `ui → core/session → core/*`. Worker threads rea
 - **Autocomplete never blocks typing.** The analysis (`Completer.complete`) is a pure function of
   `(text, offset, dialect, schema)`; the editor runs it on one worker thread per connection and drops the
   answer if the text or the cursor moved. Sentences the core writes itself ("4 cols", "foreign key …") go
-  through `autocomplete.messages.t()`, which the UI points at its Russian catalog, so the core still
+  through `autocomplete.messages.t()`, which the UI points at its Ukrainian catalog, so the core still
   knows no UI toolkit and no language.
 - **A missing SQLite file is an error**, not a new empty database (opt in with "Create the file").
 - A damaged `connections.json` / `settings.toml` is never overwritten: it is moved aside as

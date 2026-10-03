@@ -18,12 +18,12 @@ def test_defaults_when_there_is_no_file(tmp_path: Path) -> None:
 def test_save_and_load_round_trip(tmp_path: Path) -> None:
     path = tmp_path / "config" / "settings.toml"
     store = SettingsStore(path)
-    store.save(AppSettings(theme="light", language="ru"))
+    store.save(AppSettings(theme="light", language="uk"))
     assert path.read_text() == (
-        'theme = "light"\nlanguage = "ru"\nrow_limit = 1000\nkeyword_case = "upper"\n'
+        'theme = "light"\nlanguage = "uk"\nrow_limit = 1000\nkeyword_case = "upper"\n'
     )
     loaded = SettingsStore(path).load()
-    assert (loaded.theme, loaded.language) == ("light", "ru")
+    assert (loaded.theme, loaded.language) == ("light", "uk")
     assert [p.name for p in path.parent.iterdir()] == ["settings.toml"]
 
 
@@ -65,3 +65,11 @@ def test_row_limit_is_validated_and_persisted(tmp_path: Path) -> None:
     for bad in (0, -5):
         with pytest.raises(ValueError, match="row_limit"):
             AppSettings(row_limit=bad)
+
+
+def test_a_settings_file_that_still_says_russian_is_read_as_ukrainian(tmp_path: Path) -> None:
+    path = tmp_path / "settings.toml"
+    path.write_text('theme = "light"\nlanguage = "ru"\n')
+    store = SettingsStore(path)
+    assert store.load().language == "uk"
+    assert store.recovered_from is None  # not treated as a broken file

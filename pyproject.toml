@@ -72,7 +72,7 @@ ignore = ["SIM905"]
 
 [tool.ruff.lint.per-file-ignores]
 "easydbms/ui/theme/stylesheet.py" = ["E501"]  # CSS lines
-"easydbms/ui/catalog_ru.py" = ["E501", "RUF001", "RUF003"]  # translations: long, Cyrillic
+"easydbms/ui/catalog_uk.py" = ["E501", "RUF001", "RUF003"]  # translations: long, Cyrillic
 "benchmarks/**" = ["E501", "RUF001"]  # long SQL strings, "×" in reports
 "tests/core/simd/*" = ["RUF001", "RUF003"]  # ambiguous characters are the point of the fuzz corpus
 

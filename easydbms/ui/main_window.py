@@ -200,7 +200,11 @@ class MainWindow(QMainWindow):
         view_menu.addSeparator()
         language_menu = view_menu.addMenu(tr("Language"))
         languages = QActionGroup(self)
-        for code, label in (("auto", tr("System default")), ("ru", "Русский"), ("en", "English")):
+        for code, label in (
+            ("auto", tr("System default")),
+            ("uk", "Українська"),
+            ("en", "English"),
+        ):
             action = QAction(label, self, checkable=True)
             action.setChecked(self._services.settings.language == code)
             action.triggered.connect(lambda _checked=False, c=code: self.set_language(c))

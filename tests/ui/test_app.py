@@ -16,12 +16,12 @@ def test_the_window_is_built_from_the_saved_settings(
 ) -> None:
     paths = AppPaths.under(tmp_path)
     paths.ensure()
-    paths.settings_file.write_text('theme = "light"\nlanguage = "ru"\n')
+    paths.settings_file.write_text('theme = "light"\nlanguage = "uk"\n')
     window = build_window(qapp, paths)
     qtbot.addWidget(window)
-    assert current_language() == "ru"
+    assert current_language() == "uk"
     assert current_tokens().name == "light"
-    assert "Нет подключения" in window._status_label.text()
+    assert "Немає підключення" in window._status_label.text()
     window.close()
 
 

@@ -2,7 +2,7 @@
 
 The core knows no UI toolkit and no language: sentences are English templates passed through
 :func:`t`, and the application installs a translator with :func:`use_translator` (the UI points it
-at its Russian catalog). Without one, the English template is used as is.
+at its Ukrainian catalog). Without one, the English template is used as is.
 """
 
 from __future__ import annotations

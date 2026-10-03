@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Literal
 
 import tomli_w
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 
 class AppSettings(BaseModel):
@@ -17,12 +17,18 @@ class AppSettings(BaseModel):
 
     #: ``system`` follows the operating system's light / dark setting.
     theme: Literal["dark", "light", "system"] = "dark"
-    #: ``auto`` follows the system locale (Russian for ``ru*``, English otherwise).
-    language: Literal["auto", "ru", "en"] = "auto"
+    #: ``auto`` follows the system locale (Ukrainian for ``uk*``, English otherwise).
+    language: Literal["auto", "uk", "en"] = "auto"
     #: Most rows a query result keeps; the rest is cut off (and reported) to protect memory.
     row_limit: int = Field(default=1000, ge=1, le=10_000_000)
     #: Case of keywords inserted by autocomplete; ``preserve`` follows what was typed.
     keyword_case: Literal["upper", "lower", "preserve"] = "upper"
+
+    @field_validator("language", mode="before")
+    @classmethod
+    def _russian_became_ukrainian(cls, value: object) -> object:
+        """Russian left the UI; a settings file that still says ``ru`` stays usable."""
+        return "uk" if value == "ru" else value
 
 
 class SettingsStore:
