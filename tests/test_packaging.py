@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import struct
 import tomllib
 from pathlib import Path
 
@@ -10,7 +11,7 @@ from PySide6.QtWidgets import QApplication
 
 import easydbms
 from easydbms.app import main
-from easydbms.ui.icons import app_icon, draw_app_icon
+from easydbms.ui.icons import app_icon, icon_file
 
 ROOT = Path(easydbms.__file__).resolve().parent.parent
 
@@ -71,17 +72,20 @@ def test_the_workflows_are_valid_yaml_with_the_expected_jobs() -> None:
     ]
 
 
-def test_the_painted_icon_is_not_blank(qapp: QApplication) -> None:
-    pixmap = draw_app_icon(128)
-    assert (pixmap.width(), pixmap.height()) == (128, 128)
-    image = pixmap.toImage()
-    colors = {image.pixel(x, y) for x in range(0, 128, 8) for y in range(0, 128, 8)}
-    assert len(colors) >= 4  # transparent corners, the tile, the cards
-    assert image.pixelColor(0, 0).alpha() == 0
-    assert not app_icon().isNull()
-    assert app_icon().pixmap(32, 32).width() == 32
+def test_the_app_icon_is_the_logo_file_and_is_not_blank(qapp: QApplication) -> None:
+    assert icon_file() == ROOT / "packaging" / "icon.png"
+    icon = app_icon()
+    assert not icon.isNull()
+    image = icon.pixmap(64, 64).toImage()
+    assert (image.width(), image.height()) == (64, 64)
+    colors = {image.pixel(x, y) for x in range(0, 64, 4) for y in range(0, 64, 4)}
+    assert len(colors) >= 2  # the background and the mark, not one flat fill
 
 
-def test_the_shipped_icon_files_exist() -> None:
-    assert (ROOT / "packaging" / "icon.png").stat().st_size > 1000
-    assert (ROOT / "packaging" / "icon.ico").stat().st_size > 1000
+def test_the_shipped_icon_files_have_the_formats_their_extensions_promise() -> None:
+    png = (ROOT / "packaging" / "icon.png").read_bytes()
+    assert png[:8] == b"\x89PNG\r\n\x1a\n"
+    ico = (ROOT / "packaging" / "icon.ico").read_bytes()
+    reserved, kind, count = struct.unpack("<HHH", ico[:6])
+    assert (reserved, kind) == (0, 1)  # an ICO, not a renamed JPEG
+    assert count >= 1
