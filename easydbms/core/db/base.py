@@ -12,7 +12,7 @@ import contextlib
 import threading
 import time
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from types import TracebackType
 from typing import Any
 
@@ -25,7 +25,7 @@ from .errors import (
     NotConnectedError,
     QueryError,
 )
-from .types import CheckStep, ConnectionCheck, QueryResult
+from .types import ApplyResult, BoundStatement, CheckStep, ConnectionCheck, QueryResult
 
 #: Seconds ``disconnect`` waits for a running statement to stop after cancelling it.
 _DISCONNECT_WAIT = 5.0
@@ -138,6 +138,74 @@ class DatabaseClient(ABC):
                 duration=time.perf_counter() - started,
             )
 
+    def apply(self, statements: Sequence[BoundStatement]) -> ApplyResult:
+        """Run ``statements`` in one transaction: every one of them, or none.
+
+        Each statement is checked against its ``expect_rows``; a statement that fails, or that
+        affects another number of rows than expected (an ``UPDATE`` whose row was changed by
+        somebody else matches nothing), rolls everything back and is reported in the result with
+        its index. A broken connection raises :class:`ConnectionLost` instead (the server rolls
+        the transaction back by itself).
+        """
+        with self._exec_lock:
+            raw = self._raw
+            if raw is None:
+                raise NotConnectedError("not connected")
+            self._busy.set()
+            try:
+                return self._apply(raw, statements)
+            finally:
+                self._busy.clear()
+
+    def _apply(self, raw: Any, statements: Sequence[BoundStatement]) -> ApplyResult:
+        started = time.perf_counter()
+        affected: list[int] = []
+
+        def elapsed() -> float:
+            return time.perf_counter() - started
+
+        try:
+            self._run(raw, self._begin_sql, None)
+        except Exception as error:
+            raise self._failure(raw, error) from error
+        for index, statement in enumerate(statements):
+            try:
+                count = self._run_bound(raw, statement.sql, statement.params)
+            except Exception as error:
+                failure = self._failure(raw, error)
+                self._rollback(raw)
+                return ApplyResult(
+                    False, tuple(affected), elapsed(), index, str(failure), failure.code
+                )
+            affected.append(count)
+            expected = statement.expect_rows
+            if expected is not None and count != expected:
+                self._rollback(raw)
+                return ApplyResult(
+                    False, tuple(affected), elapsed(), index, conflict=count == 0, matched=count
+                )
+        try:
+            self._run(raw, "COMMIT", None)
+        except Exception as error:
+            failure = self._failure(raw, error)
+            self._rollback(raw)
+            return ApplyResult(False, tuple(affected), elapsed(), None, str(failure), failure.code)
+        return ApplyResult(True, tuple(affected), elapsed())
+
+    def _failure(self, raw: Any, error: Exception) -> DbError:
+        """The error to report for ``error``; a lost connection is dropped and raised."""
+        translated = (
+            error if isinstance(error, DbError) else self._translate_query_error(raw, error)
+        )
+        if isinstance(translated, ConnectionLost):
+            self._drop_lost_connection(raw)
+            raise translated from error
+        return translated
+
+    def _rollback(self, raw: Any) -> None:
+        with contextlib.suppress(Exception):
+            self._run(raw, "ROLLBACK", None)
+
     def cancel(self) -> bool:
         """Ask the server to abort the running statement. Safe to call from another thread.
 
@@ -228,6 +296,13 @@ class DatabaseClient(ABC):
 
     @abstractmethod
     def _run(self, raw: Any, sql: str, max_rows: int | None) -> RawResult: ...
+
+    @abstractmethod
+    def _run_bound(self, raw: Any, sql: str, params: Sequence[Any]) -> int:
+        """Run one statement with bound parameters; return the rows it affected."""
+
+    #: Statement that opens a transaction on the (autocommit) connection.
+    _begin_sql = "BEGIN"
 
     @abstractmethod
     def _cancel(self, raw: Any) -> None: ...

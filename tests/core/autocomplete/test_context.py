@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from easydbms.core.autocomplete import Expect, SchemaIndex
+from easydbms.core.autocomplete import CursorContext, Expect, SchemaIndex, Source
 from easydbms.core.dialects import MYSQL, SQLITE
 
 from .conftest import at
@@ -10,11 +10,11 @@ from .conftest import at
 E = Expect
 
 
-def refs(ctx):  # type: ignore[no-untyped-def]
+def refs(ctx: CursorContext) -> list[str]:
     return [s.ref for s in ctx.sources]
 
 
-def columns(source) -> list[str]:  # type: ignore[no-untyped-def]
+def columns(source: Source) -> list[str]:
     return [c.name for c in source.columns]
 
 

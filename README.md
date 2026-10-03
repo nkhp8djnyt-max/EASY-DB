@@ -4,11 +4,18 @@ Desktop database client in Python: SQL editor, ERD, editable result grid. Suppor
 dialects: **PostgreSQL**, **MySQL** (including MariaDB) and **SQLite**. Corporate dialects
 (SQL Server, Oracle) are intentionally out of scope.
 
-**Status: stage 4 of 7 — autocomplete.** Connect, write SQL in tabs, run a statement or a whole script,
-browse the result in a sortable, filterable grid, see the database as an ER diagram — and now the editor
-completes what you type: keywords, tables, columns of the tables in `FROM`, aliases, ready `JOIN … ON`
-conditions made from foreign keys, dialect functions and types, snippets such as `sel` → `SELECT * FROM`.
-Editing results is the next stage (see [Roadmap](#roadmap)).
+**Status: stage 5 of 7 — editable grid.** Connect, write SQL (with autocomplete) in tabs, run it, see the
+database as an ER diagram — and now **change data in the grid**: double-click or `F2` a cell, `Ctrl+N` a new
+row, `Del` a row. Nothing is written until you press `Alt+S`: you review the generated `UPDATE` / `INSERT` /
+`DELETE`, and everything is applied in one transaction (all of it, or none). SSL, SSH tunnels and
+`~/.pgpass` are the next stage (see [Roadmap](#roadmap)).
+
+| Pending changes | Review before writing | Someone else changed the row |
+|---|---|---|
+| ![](docs/screenshots/stage5-pending.png) | ![](docs/screenshots/stage5-review.png) | ![](docs/screenshots/stage5-conflict.png) |
+
+More: [a join result is read-only, and says why](docs/screenshots/stage5-readonly.png),
+[light theme, Russian UI](docs/screenshots/stage5-pending-light-ru.png).
 
 | Tables after `FROM` | Columns of an alias | Join condition from the foreign key |
 |---|---|---|
@@ -52,6 +59,44 @@ import simd; print(simd.status())"` shows what is active.
 Config lives in the per-user config directory (`connections.json`, `settings.toml`, `vault.json`)
 and data in the per-user data directory (`app.db`). Set `EASYDBMS_HOME=/some/dir` to keep
 everything in one place (portable installs, experiments).
+
+## What stage 5 does
+
+- **What can be edited.** The rows of one table: a table tab, or the result of a plain
+  `SELECT … FROM table [WHERE …] [ORDER BY …] [LIMIT …]` (aliases and column lists are fine, as long as
+  the key columns are in the list). Everything else — joins, `GROUP BY`, `DISTINCT`, aggregates, CTEs,
+  subqueries in `FROM`, views, a read-only connection — is read-only, and the strip under the grid says why
+  (*"Read-only: this is not the rows of a single table …"*). A table **without a primary key** uses a unique
+  index if it has one; otherwise *Choose key columns…* lets you tick the columns that identify a row (remembered
+  per connection in `app.db`, migration 5). A change that would touch more than one row is refused.
+- **Editing.** `F2` / double-click opens an editor that fits the type: a combo for booleans (with NULL), a
+  calendar for dates, date-time and time editors, a checked line for numbers (validators), a line for text
+  (long or multi-line text opens a dialog). The right-click menu has *Set NULL*, *Use the default* (new rows),
+  *Edit in a dialog…*, *Revert this cell / row*. `Ctrl+N` adds a row, `Ctrl+D` duplicates the selected rows (key
+  columns left to the database), `Del` marks rows for deletion (again: restores them), `Ctrl+Z` / `Ctrl+Y` undo and
+  redo, `Esc` discards everything pending (itself undoable). Empty input means NULL for every type but text.
+- **Colours.** Edited cells are yellow (the tooltip says what the value *was*), new rows green (cells you did
+  not fill show `default`, `NULL` or `required`), rows marked for deletion red and struck through, a statement that
+  failed marks its cell dark red with the server's message in the tooltip.
+- **The change set survives** sorting, filtering, paging and reloading (rows are identified by their key, not
+  by position); new rows stay at the end of every page. `⟳` reload keeps your edits and measures them against the
+  fresh rows.
+- **Review, then one transaction.** `Alt+S` (or *Query → Apply changes*) opens the review: the SQL with the
+  values written out, how many rows will be changed / added / deleted. *Apply* runs the statements with bound
+  parameters in **one transaction** on the connection's second ("meta") lane, so a running query is not
+  disturbed. On a **production** connection a second question follows. Deletes run first, then updates, then
+  inserts. The statement text never contains your values — they are parameters.
+- **Optimistic locking.** An `UPDATE` finds its row by the key it was loaded with *and* by the old value of every
+  cell it changes (`col = old` / `col IS NULL`). If somebody else changed or deleted the row meanwhile it matches
+  nothing: the whole transaction is rolled back, the row is named in the message, your edits stay in the grid,
+  and *Reload* lets you rebase them on the current rows and apply again. Floats, JSON, binary and arrays are
+  not compared (equality is unreliable) — they rely on the key.
+- **Errors.** A constraint violation, a NOT NULL, a duplicate key: rolled back, `Nothing was written.`, the cell
+  of the failing statement is marked, the edits are kept. Applying without a connection is reported in the strip,
+  not raised.
+- **Don't lose edits by accident.** Closing a table tab or a query tab, running a statement that replaces an edited
+  result, or quitting the application with pending changes asks first.
+- **Copy** (all grids): `Ctrl+C` / `Ctrl+Shift+C` as TSV, *Copy as CSV*, *Copy as Markdown* from the context menu.
 
 ## What stage 4 does
 
@@ -301,12 +346,13 @@ easydbms/
 │  ├─ browse/               # SQL for paging, sorting and filtering a table
 │  ├─ queries/              # query tabs, danger guard, script job
 │  ├─ autocomplete/         # cursor context, candidates + ranking, snippets, usage counts
+│  ├─ editing/              # change set (undo/redo), value parsing, UPDATE/INSERT/DELETE builder, targets
 │  ├─ simd/                 # optional C extension: AVX2/SSE2 scanner + statement splitter
 │  ├─ columnar.py           # Arrow/NumPy sort and filter of a result set
 │  ├─ storage/              # app.db (migrations) and settings.toml
 │  ├─ paths.py  services.py
 ├─ ui/                      # PySide6: main window, workspace, editor (+ completion popup), results +
-│                           #   table tabs, erd/ (cards, lines, view, pane), quick open, dialogs, theme, i18n
+│                           #   table tabs (+ the editable grid: model, delegates, review dialog), erd/ (cards, lines, view, pane), quick open, dialogs, theme, i18n
 └─ app.py
 benchmarks/                 # ClickBench harness and micro-benchmarks
 ```
@@ -333,6 +379,13 @@ Dependencies point one way: `ui → core/session → core/*`. Worker threads rea
 - **MySQL/MariaDB: join in Python, not in the server.** Joining `KEY_COLUMN_USAGE` to
   `REFERENTIAL_CONSTRAINTS` inside `information_schema` took 590 ms for 1 000 tables where the two queries
   alone take 15 ms each, so the join is done on the client.
+- **Applying edits** (`DatabaseClient.apply`): `BEGIN`, every statement with bound parameters, the affected row
+  count of each is checked against what it must be (1), `COMMIT`; anything else rolls back and is reported with the
+  index of the failing statement. MySQL connections are opened with `CLIENT_FOUND_ROWS`, so "rows affected" counts
+  rows an `UPDATE` *matched* (as PostgreSQL and SQLite do), which is what tells "row not found" from "row already has
+  these values". SQLite starts with `BEGIN IMMEDIATE`. Values typed as text are parsed per column type
+  (`core/editing/values.py`); whether a cell *changed* is decided on the values, not their spelling (`5.0` is `5.00`,
+  MySQL's `TIME` as `timedelta`, SQLite's text dates, JSON key order).
 - **Autocomplete never blocks typing.** The analysis (`Completer.complete`) is a pure function of
   `(text, offset, dialect, schema)`; the editor runs it on one worker thread per connection and drops the
   answer if the text or the cursor moved. Sentences the core writes itself ("4 cols", "foreign key …") go
@@ -365,7 +418,7 @@ Everything else asks a `Dialect` instead of branching on a database name:
 ## Development
 
 ```bash
-ruff check . && ruff format --check . && mypy      # mypy runs in strict mode
+ruff check . && ruff format --check . && mypy      # mypy runs in strict mode, tests included
 pytest                                             # SQLite always; Qt runs headless (offscreen)
 EASYDBMS_FUZZ_ITERATIONS=60000 pytest tests/core/simd   # longer native-vs-Python differential fuzz
 ```
@@ -390,6 +443,6 @@ libdbus-1-3` installed.
    optional native SIMD scanner, ClickBench harness.
 3. ✅ **Schema introspection, ERD pane, table tabs**, `Ctrl+P` go to table, schema benchmarks.
 4. ✅ **Autocomplete** (keywords → tables → columns → aliases → JOIN by FK), snippets, usage ranking.
-5. Editable grid: change set, preview, Alt+S, one transaction, optimistic locking.
+5. ✅ **Editable grid**: change set, review (Alt+S), one transaction, optimistic locking, key columns.
 6. SSL, SSH tunnel, `~/.pgpass` / `pg_service.conf`.
 7. Cloud providers, history and saved queries, ERD export, packaging.

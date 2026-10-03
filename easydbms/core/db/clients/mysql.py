@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import contextlib
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 import pymysql
+from pymysql.constants import CLIENT
 from pymysql.cursors import SSCursor
 
 from ...connections import ServerConnection
@@ -70,6 +71,10 @@ class MySqlClient(DatabaseClient):
         config = self._server_config
         kwargs: dict[str, Any] = {
             "charset": "utf8mb4",
+            # "rows affected" counts the rows an UPDATE matched, as PostgreSQL and SQLite do (by
+            # default MySQL counts only rows whose values changed), so applying edits can tell
+            # "row not found" from "row already has these values".
+            "client_flag": CLIENT.FOUND_ROWS,
             "connect_timeout": int(DEFAULT_TIMEOUT),
             "program_name": "EasyDBMS",
         }
@@ -130,6 +135,15 @@ class MySqlClient(DatabaseClient):
             return columns, rows[:max_rows], None, truncated
         finally:
             with contextlib.suppress(pymysql.err.Error):  # a killed query reports the interruption
+                cursor.close()
+
+    def _run_bound(self, raw: Any, sql: str, params: Sequence[Any]) -> int:
+        cursor = raw.cursor()
+        try:
+            cursor.execute(sql, tuple(params))
+            return int(cursor.rowcount)
+        finally:
+            with contextlib.suppress(pymysql.err.Error):
                 cursor.close()
 
     def _abandon_rest(self, raw: Any) -> None:

@@ -7,7 +7,7 @@ import pytest
 from easydbms.core.autocomplete import Completer, Completion, Completions, Expect, KeywordCase, Kind
 from easydbms.core.autocomplete.provider import quality
 from easydbms.core.dialects import MYSQL, POSTGRESQL, SQLITE, Dialect
-from easydbms.core.schema import DatabaseSchema
+from easydbms.core.schema import DatabaseSchema, ForeignKey
 
 from .conftest import col, shop_schema, tbl
 
@@ -430,9 +430,7 @@ def test_composite_foreign_key_joins_every_pair(completer: Completer) -> None:
     assert result.items[0].insert == "c.pa = p.a AND c.pb = p.b"
 
 
-def fk_pair():
-    from easydbms.core.schema import ForeignKey
-
+def fk_pair() -> ForeignKey:
     return ForeignKey(None, ("pa", "pb"), "public", "p", ("a", "b"))
 
 

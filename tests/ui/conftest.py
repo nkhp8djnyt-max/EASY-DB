@@ -9,12 +9,22 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from PySide6.QtWidgets import QApplication, QFileDialog, QInputDialog, QLabel, QMessageBox, QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QApplication,
+    QDialog,
+    QFileDialog,
+    QInputDialog,
+    QLabel,
+    QMessageBox,
+    QWidget,
+)
 
 from easydbms.core.connections import FileConnection, MemorySecretStore, ServerConnection
 from easydbms.core.paths import AppPaths
 from easydbms.core.services import Services, build_services
 from easydbms.ui.i18n import set_language
+from easydbms.ui.results.dialogs import KeyDialog, PreviewDialog, TextDialog
 from easydbms.ui.runtime import BackgroundRunner, EventBridge
 from easydbms.ui.session_panel import SessionPanel
 from easydbms.ui.theme import apply_theme, current_tokens
@@ -80,6 +90,14 @@ class Prompts:
     text_prompts: list[str] = field(default_factory=list)
     open_file: str = ""
     save_file: str = ""
+    #: The review dialog of edited rows: answer it, and keep the ones that were shown.
+    preview_accepts: bool = True
+    previews: list[PreviewDialog] = field(default_factory=list)
+    #: Columns ticked in the key dialog (``None`` cancels it) and the dialogs shown.
+    key_choice: tuple[str, ...] | None = None
+    key_dialogs: list[KeyDialog] = field(default_factory=list)
+    #: Text typed into the long-text dialog (``None`` cancels it).
+    long_text: str | None = None
 
 
 @pytest.fixture
@@ -100,6 +118,29 @@ def prompts(monkeypatch: pytest.MonkeyPatch) -> Prompts:
         state.text_prompts.append(label)
         return state.text_answers.pop(0) if state.text_answers else ("", False)
 
+    def preview_exec(dialog: PreviewDialog) -> int:
+        state.previews.append(dialog)
+        return QDialog.DialogCode.Accepted if state.preview_accepts else QDialog.DialogCode.Rejected
+
+    def key_exec(dialog: KeyDialog) -> int:
+        state.key_dialogs.append(dialog)
+        if state.key_choice is None:
+            return QDialog.DialogCode.Rejected
+        for row in range(dialog.list.count()):
+            item = dialog.list.item(row)
+            wanted = item.data(Qt.ItemDataRole.UserRole) in state.key_choice
+            item.setCheckState(Qt.CheckState.Checked if wanted else Qt.CheckState.Unchecked)
+        return QDialog.DialogCode.Accepted
+
+    def text_exec(dialog: TextDialog) -> int:
+        if state.long_text is None:
+            return QDialog.DialogCode.Rejected
+        dialog.editor.setPlainText(state.long_text)
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(PreviewDialog, "exec", preview_exec)
+    monkeypatch.setattr(KeyDialog, "exec", key_exec)
+    monkeypatch.setattr(TextDialog, "exec", text_exec)
     monkeypatch.setattr(QMessageBox, "question", staticmethod(question))
     monkeypatch.setattr(QMessageBox, "warning", staticmethod(message))
     monkeypatch.setattr(QMessageBox, "information", staticmethod(message))

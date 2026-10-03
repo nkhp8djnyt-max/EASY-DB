@@ -19,10 +19,12 @@ from .errors import (
     SslError,
 )
 from .factory import create_client
-from .types import CheckStep, ConnectionCheck, QueryResult
+from .types import ApplyResult, BoundStatement, CheckStep, ConnectionCheck, QueryResult
 
 __all__ = [
+    "ApplyResult",
     "AuthFailed",
+    "BoundStatement",
     "CheckStep",
     "ConnectTimeout",
     "ConnectionCheck",

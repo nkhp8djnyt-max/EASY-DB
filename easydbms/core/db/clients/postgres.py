@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 import psycopg
@@ -85,6 +85,11 @@ class PostgresClient(DatabaseClient):
                 return columns, cursor.fetchall(), None, False
             rows = cursor.fetchmany(max_rows + 1)
             return columns, rows[:max_rows], None, len(rows) > max_rows
+
+    def _run_bound(self, raw: Any, sql: str, params: Sequence[Any]) -> int:
+        with raw.cursor() as cursor:
+            cursor.execute(sql, params)
+            return int(cursor.rowcount)
 
     def _run_streaming(self, raw: Any, sql: str, max_rows: int) -> RawResult:
         """Read at most ``max_rows`` rows without letting libpq buffer the whole result.

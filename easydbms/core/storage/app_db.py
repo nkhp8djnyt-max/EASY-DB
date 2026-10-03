@@ -70,6 +70,18 @@ MIGRATIONS: tuple[Migration, ...] = (
             " PRIMARY KEY (connection_id, key))",
         ),
     ),
+    Migration(
+        5,
+        "columns the user chose to identify the rows of tables without a primary key",
+        (
+            "CREATE TABLE edit_keys ("
+            " connection_id TEXT NOT NULL,"
+            " schema TEXT NOT NULL,"
+            " name TEXT NOT NULL,"
+            " columns TEXT NOT NULL,"
+            " PRIMARY KEY (connection_id, schema, name))",
+        ),
+    ),
 )
 
 

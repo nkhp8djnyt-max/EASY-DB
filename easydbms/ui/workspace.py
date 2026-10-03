@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
 from functools import partial
 
@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 
 from ..core.autocomplete import Completer, KeywordCase, UsageStore
 from ..core.connections import FileConnection, ServerConnection
-from ..core.db import NotConnectedError, QueryResult
+from ..core.db import ApplyResult, BoundStatement, NotConnectedError, QueryResult
 from ..core.dialects import (
     MYSQL,
     POSTGRESQL,
@@ -35,6 +35,7 @@ from ..core.dialects import (
     format_sql,
     get_dialect,
 )
+from ..core.editing import EditKeyStore
 from ..core.queries import (
     Outcome,
     QueryTabStore,
@@ -50,7 +51,7 @@ from ..core.session import Session
 from .connection_form import DIALECT_LABELS
 from .editor import CompletionSource, SqlEditor
 from .i18n import tr
-from .results import ResultsPanel, TableTab
+from .results import EditingContext, ResultsPanel, TableTab
 
 _SAVE_DELAY_MS = 600
 _DIALECTS: tuple[Dialect, ...] = (POSTGRESQL, MYSQL, SQLITE)
@@ -95,12 +96,23 @@ class QueryWorkspace(QWidget):
         *,
         usage: UsageStore | None = None,
         keyword_case: Callable[[], str] | None = None,
+        edit_keys: EditKeyStore | None = None,
     ) -> None:
         super().__init__(parent)
         self._config = config
         self._tab_store = tab_store
         self._row_limit = row_limit
         self._usage = usage
+        self._editing = EditingContext(
+            connection_id=config.id,
+            connection_name=config.name,
+            dialect=config.dialect_impl,
+            schema=self._schema,
+            apply=self._apply_changes,
+            read_only=config.read_only,
+            production=config.production,
+            edit_keys=edit_keys,
+        )
         self._keyword_case = keyword_case or (lambda: KeywordCase.UPPER.value)
         self._session: Session | None = None
         self._completion_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="complete")
@@ -196,6 +208,24 @@ class QueryWorkspace(QWidget):
         session = self._session
         return session.schema if session is not None else None
 
+    def _apply_changes(self, statements: Sequence[BoundStatement]) -> Future[ApplyResult]:
+        """Write edited rows in one transaction on the meta lane (the query lane stays free)."""
+        session = self._session
+        if session is None or session.client is None:
+            raise NotConnectedError("the connection is not ready")
+        return session.run_on_meta(lambda client: client.apply(statements))
+
+    def apply_changes(self) -> None:
+        """Review and write the pending edits of the grid that is showing (Alt+S)."""
+        tab = self.current_tab()
+        editor = tab.results.current_editor() if tab is not None else None
+        if editor is not None:
+            editor.request_apply()
+
+    def pending_changes(self) -> int:
+        """Edits in any grid of this connection that were not written yet."""
+        return sum(tab.results.pending_count() for tab in self.all_tabs())
+
     def complete(self) -> None:
         """Open the suggestions in the current editor (Ctrl+Space)."""
         tab = self.current_tab()
@@ -228,6 +258,8 @@ class QueryWorkspace(QWidget):
         tab.results.errorLocated.connect(
             lambda start, pos, t=tab: self._locate_error(t, start, pos)
         )
+        tab.results.set_editing(self._editing)
+        tab.results.rerunRequested.connect(lambda statement, t=tab: self._rerun(t, statement))
         index = self.tabs.addTab(tab, tab.title)
         self.tabs.setCurrentIndex(index)
         tab.editor.setFocus()
@@ -237,6 +269,9 @@ class QueryWorkspace(QWidget):
     def close_tab(self, index: int) -> None:
         widget = self.tabs.widget(index)
         if not isinstance(widget, QueryTab):
+            return
+        pending = widget.results.pending_count()
+        if pending and not self._confirm_discard(pending, tr("Close it and discard them?")):
             return
         if widget.run is not None:
             widget.run.cancel()
@@ -396,6 +431,9 @@ class QueryWorkspace(QWidget):
             return
         if not self._confirmed(statements):
             return
+        replaced = tab.results.pending_count(tables=False)
+        if replaced and not self._confirm_discard(replaced, tr("Run it and discard them?")):
+            return
         tab.results.clear()
         tab.started = time.perf_counter()
         tab.run = session.run_script(
@@ -404,6 +442,21 @@ class QueryWorkspace(QWidget):
         tab.run.future.add_done_callback(partial(self._emit_finished, tab))
         self._clock.start()
         self._sync_controls()
+
+    def _rerun(self, tab: QueryTab, statement: Statement) -> None:
+        """Run a statement again after its result was edited, to show what is in the table now."""
+        if tab.alive and not tab.running:
+            self._run(tab, [statement])
+
+    def _confirm_discard(self, count: int, question: str) -> bool:
+        answer = QMessageBox.question(
+            self,
+            tr("Discard the changes?"),
+            tr("This tab has {n} changes that were not applied.", n=count) + "\n\n" + question,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
 
     def _confirmed(self, statements: list[Statement]) -> bool:
         reasons: list[str] = []

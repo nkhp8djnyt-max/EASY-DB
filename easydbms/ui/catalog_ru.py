@@ -1,6 +1,119 @@
 """Russian translations, keyed by the English source string."""
 
 RU: dict[str, str] = {
+    # stage 5: editing results
+    "All statements run in one transaction. If one fails, nothing is written.": (
+        "Все операторы выполняются в одной транзакции. Если один не пройдёт, не запишется ничего."
+    ),
+    "Applied {n} changes in {time}.": "Применено изменений: {n} за {time}.",
+    "Apply": "Применить",
+    "Apply &changes": "Применить &правки",
+    "Apply changes…": "Применить правки…",
+    "Apply them?": "Применить их?",
+    "Change production data?": "Изменить данные в боевой базе?",
+    "Choose key columns": "Выбор ключевых столбцов",
+    "Choose key columns…": "Выбрать ключевые столбцы…",
+    "Close it and discard them?": "Закрыть вкладку и отбросить их?",
+    "Run it and discard them?": "Выполнить запрос и отбросить их?",
+    "Copy": "Копировать",
+    "Copy SQL": "Копировать SQL",
+    "Copy as CSV": "Копировать как CSV",
+    "Copy as Markdown": "Копировать как Markdown",
+    "Copy with headers": "Копировать с заголовками",
+    "Delete row": "Удалить строку",
+    "Discard": "Отменить",
+    "Discard changes": "Отменить правки",
+    "Discard the changes?": "Отбросить правки?",
+    "Duplicate row": "Дублировать строку",
+    "Edit cell": "Править ячейку",
+    "Edit in a dialog…": "Править в окне…",
+    "Edit {name}": "Правка: {name}",
+    "Editable · {table} (key: {key}) · F2 edit · Ctrl+N new row · Del delete": (
+        "Можно править · {table} (ключ: {key}) · F2 правка · Ctrl+N новая строка · Del удалить"
+    ),
+    "Load the current rows; your changes are kept": "Загрузить текущие строки; ваши правки сохранятся",
+    "New row": "Новая строка",
+    "New row (Ctrl+N)": "Новая строка (Ctrl+N)",
+    "Nothing was written.": "Ничего не записано.",
+    "Pending changes: {n} · Alt+S apply · Esc discard": (
+        "Ожидает подтверждения — изменений: {n} · Alt+S применить · Esc отменить"
+    ),
+    "Quit and discard them?": "Выйти и отбросить их?",
+    "Quit without applying?": "Выйти, не применив правки?",
+    "Read-only: only a plain SELECT from one table can be edited.": (
+        "Только чтение: править можно только простой SELECT из одной таблицы."
+    ),
+    "Read-only: the columns do not match {name}.": "Только чтение: столбцы не соответствуют таблице {name}.",
+    "Read-only: the database structure is not loaded yet.": (
+        "Только чтение: структура базы данных ещё не загружена."
+    ),
+    "Read-only: the key columns ({columns}) are not in the result; add them to the SELECT list.": (
+        "Только чтение: ключевых столбцов ({columns}) нет в результате; добавьте их в список SELECT."
+    ),
+    "Read-only: the structure of {name} is not known (yet).": (
+        "Только чтение: структура {name} пока неизвестна."
+    ),
+    "Read-only: this connection is read-only.": "Только чтение: подключение открыто только для чтения.",
+    "Read-only: this is not the rows of a single table (a join, grouping, DISTINCT, an aggregate or a subquery). Open the table to change its data.": (
+        "Только чтение: это не строки одной таблицы (соединение, группировка, DISTINCT, агрегат "
+        "или подзапрос). Откройте таблицу, чтобы изменить её данные."
+    ),
+    "Read-only: {name} has no primary key and no unique index.": (
+        "Только чтение: у {name} нет первичного ключа и уникального индекса."
+    ),
+    "Read-only: {name} is a view.": "Только чтение: {name} — представление.",
+    "Redo": "Повторить",
+    "Redo (Ctrl+Y)": "Повторить (Ctrl+Y)",
+    "Reload": "Перечитать",
+    "Restore row": "Вернуть строку",
+    "Revert this cell": "Вернуть ячейку",
+    "Revert this row": "Вернуть строку как была",
+    "Review the changes": "Проверьте правки",
+    "Set NULL": "Записать NULL",
+    "The change could not be written.": "Правку не удалось записать.",
+    "The column {name} does not accept NULL.": "Столбец {name} не принимает NULL.",
+    "The table {name} has no primary key. Tick the columns whose values are unique for every row: changes find their row by them. A change that would touch more than one row is refused and nothing is written.": (
+        "У таблицы {name} нет первичного ключа. Отметьте столбцы, значения которых уникальны для "
+        "каждой строки: по ним правки находят свою строку. Правка, затрагивающая больше одной "
+        "строки, отклоняется, и ничего не записывается."
+    ),
+    "There are {n} changes in the grids that were not applied.": (
+        "В таблицах есть неприменённые правки: {n}."
+    ),
+    "This is the PRODUCTION connection “{name}”. {n} statements will change its data.": (
+        "Это БОЕВОЕ подключение «{name}». Операторов, меняющих данные: {n}."
+    ),
+    "This row will be deleted.": "Эта строка будет удалена.",
+    "This row will be inserted.": "Эта строка будет добавлена.",
+    "This tab has {n} changes that were not applied.": "На этой вкладке неприменённых правок: {n}.",
+    "Undo": "Отменить действие",
+    "Undo (Ctrl+Z)": "Отменить действие (Ctrl+Z)",
+    "Use the default": "Значение по умолчанию",
+    "a UUID": "UUID",
+    "a date (YYYY-MM-DD)": "дата (ГГГГ-ММ-ДД)",
+    "a date and time (YYYY-MM-DD HH:MM:SS)": "дата и время (ГГГГ-ММ-ДД ЧЧ:ММ:СС)",
+    "a number": "число",
+    "a time (HH:MM:SS)": "время (ЧЧ:ММ:СС)",
+    "a valid value": "допустимое значение",
+    "a whole number": "целое число",
+    "default": "по умолчанию",
+    "false": "ложь",
+    "rows to add: {n}": "добавить строк: {n}",
+    "rows to change: {n}": "изменить строк: {n}",
+    "rows to delete: {n}": "удалить строк: {n}",
+    "true": "истина",
+    "true or false": "истина или ложь",
+    "valid JSON": "корректный JSON",
+    "was: {value}": "было: {value}",
+    "{name}: expected {what}.": "{name}: ожидается {what}.",
+    "{row}the key matches {n} rows, so the change was refused. Nothing was written. Choose key columns that are unique.": (
+        "{row}ключу соответствует строк: {n}, поэтому правка отклонена. Ничего не записано. "
+        "Выберите уникальные ключевые столбцы."
+    ),
+    "{row}was changed or deleted by someone else since it was loaded. Nothing was written. Reload to see the current rows; your changes are kept.": (
+        "{row}кто-то другой изменил или удалил эту строку после загрузки. Ничего не записано. "
+        "Перечитайте строки, чтобы увидеть текущие данные; ваши правки сохранятся."
+    ),
     # stage 4: autocomplete
     "&Autocomplete": "&Автодополнение",
     "Keyword case": "Регистр ключевых слов",

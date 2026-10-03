@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -44,6 +44,9 @@ class ScriptedClient(DatabaseClient):
 
     def _run(self, raw: Any, sql: str, max_rows: int | None) -> RawResult:
         return (), [], None, False
+
+    def _run_bound(self, raw: Any, sql: str, params: Sequence[Any]) -> int:
+        return 1
 
     def _cancel(self, raw: Any) -> None: ...
 

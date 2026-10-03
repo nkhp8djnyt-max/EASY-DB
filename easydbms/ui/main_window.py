@@ -67,7 +67,9 @@ class MainWindow(QMainWindow):
         self.statusBar().addWidget(self._status_label, 1)
         bridge.posted.connect(self._on_event)
         self._restore_state()
-        services.usage_store.prune({c.id for c in services.store.all()})
+        known = {c.id for c in services.store.all()}
+        services.usage_store.prune(known)
+        services.edit_keys.prune(known)
         self._refresh()
 
     # ------------------------------------------------------------------ construction
@@ -98,6 +100,10 @@ class MainWindow(QMainWindow):
             action.triggered.connect(lambda _checked=False, h=handler: self._with_workspace(h))
             query_menu.addAction(action)
         query_menu.addSeparator()
+        apply_action = QAction(tr("Apply &changes"), self)
+        apply_action.setShortcut(QKeySequence("Alt+S"))
+        apply_action.triggered.connect(lambda: self._with_workspace(lambda w: w.apply_changes()))
+        query_menu.addAction(apply_action)
         suggest = QAction(tr("&Autocomplete"), self)
         suggest.setShortcut(QKeySequence("Ctrl+Space"))
         suggest.triggered.connect(lambda: self._with_workspace(lambda w: w.complete()))
@@ -420,6 +426,7 @@ class MainWindow(QMainWindow):
                 lambda: self._services.settings.row_limit,
                 usage=self._services.usage_store,
                 keyword_case=lambda: self._services.settings.keyword_case,
+                edit_keys=self._services.edit_keys,
             )
             self._workspaces[session.id] = workspace
             self.workspaces.addWidget(workspace)
@@ -450,6 +457,7 @@ class MainWindow(QMainWindow):
             self._services.tab_store.forget(connection_id)
             self._services.erd_store.forget(connection_id)
             self._services.usage_store.forget(connection_id)
+            self._services.edit_keys.forget(connection_id)
             pane = self._erd_panes.pop(connection_id, None)
             if pane is not None:
                 self.erd_stack.removeWidget(pane)
@@ -522,7 +530,25 @@ class MainWindow(QMainWindow):
         db.set_state(_GEOMETRY_KEY, bytes(self.saveGeometry().toBase64().data()).decode("ascii"))
         db.set_state(_SPLITTER_KEY, self.splitter.sizes())
 
+    def _confirm_quit(self) -> bool:
+        pending = sum(w.pending_changes() for w in self._workspaces.values())
+        if not pending:
+            return True
+        answer = QMessageBox.question(
+            self,
+            tr("Quit without applying?"),
+            tr("There are {n} changes in the grids that were not applied.", n=pending)
+            + "\n\n"
+            + tr("Quit and discard them?"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
+
     def closeEvent(self, event: QCloseEvent) -> None:
+        if not self._closed and not self._confirm_quit():
+            event.ignore()
+            return
         if not self._closed:  # a second close request must not touch the closed services
             self._closed = True
             for workspace in self._workspaces.values():

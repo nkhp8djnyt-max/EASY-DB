@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QTabBar,
     QTabWidget,
     QVBoxLayout,
@@ -18,10 +19,13 @@ from PySide6.QtWidgets import (
 )
 
 from ...core.db import QueryError, QueryResult
+from ...core.dialects import Statement
+from ...core.editing import EditTarget, ReadOnly, ReadOnlyReason, target_for_query
 from ...core.queries import Outcome, StatementOutcome
 from ...core.schema import TableKey
 from ..i18n import tr
 from ..theme import current_tokens
+from .editing import EditingContext, GridEditor
 from .grid import ResultGrid
 from .model import ResultTableModel
 from .table_tab import TableTab
@@ -54,9 +58,16 @@ class _Message(QWidget):
 
 
 class _GridPage(QWidget):
-    def __init__(self, result: QueryResult, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        result: QueryResult,
+        statement: Statement | None = None,
+        editing: EditingContext | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
-        self.model = ResultTableModel(result)
+        self.statement = statement
+        self._columns = result.columns
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -76,11 +87,45 @@ class _GridPage(QWidget):
         layout.addLayout(bar)
 
         self.grid = ResultGrid()
-        self.grid.set_result_model(self.model)
         self.empty = self._empty_state()
         layout.addWidget(self.grid, 1)
         layout.addWidget(self.empty, 1)
+        self.editor = GridEditor(self.grid, editing)
+        self.editor.modelReplaced.connect(self._on_model_replaced)
+        layout.addWidget(self.editor.bar)
+        self.editor.show_result(result, self._resolver(editing))
         self._update_summary()
+
+    @property
+    def model(self) -> ResultTableModel:
+        model = self.editor.model
+        assert model is not None
+        return model
+
+    def _resolver(self, editing: EditingContext | None) -> Callable[..., EditTarget | ReadOnly]:
+        statement = self.statement
+
+        def resolve(chosen: object = None) -> EditTarget | ReadOnly:
+            context = self.editor.context if hasattr(self, "editor") else editing
+            schema = context.schema() if context is not None else None
+            if statement is None or context is None:
+                return ReadOnly(ReadOnlyReason.NOT_A_QUERY)
+            if schema is None:
+                return ReadOnly(ReadOnlyReason.UNKNOWN_TABLE)
+            return target_for_query(
+                statement.body,
+                schema,
+                context.dialect,
+                self._columns,
+                lambda _table: chosen,  # type: ignore[arg-type,return-value]
+            )
+
+        return resolve
+
+    def _on_model_replaced(self) -> None:
+        if hasattr(self, "filter_edit"):
+            self.model.set_filter(self.filter_edit.text())
+            self._update_summary()
 
     def _empty_state(self) -> QFrame:
         frame = QFrame()
@@ -121,6 +166,8 @@ class _GridPage(QWidget):
 class ResultsPanel(QWidget):
     #: An error with a position: ``(statement start offset, 1-based position inside it or 0)``.
     errorLocated = Signal(int, int)
+    #: Edits of a statement's result were written: run the statement again.
+    rerunRequested = Signal(object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -137,7 +184,30 @@ class ResultsPanel(QWidget):
         self._hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self._hint)
         self._counter = 0
+        self._editing: EditingContext | None = None
         self._sync_hint()
+
+    def set_editing(self, editing: EditingContext | None) -> None:
+        """Let the grids of this panel edit their rows (``None``: everything is read-only)."""
+        self._editing = editing
+        for tab in self._table_tabs.values():
+            tab.set_editing(editing)
+
+    def pending_count(self, *, tables: bool = True) -> int:
+        """Changes made in the grids of this panel and not written yet.
+
+        ``tables=False`` counts only the statement results, which a new run replaces.
+        """
+        total = 0
+        for index in range(self.tabs.count()):
+            page = self.tabs.widget(index)
+            if (isinstance(page, TableTab) and tables) or isinstance(page, _GridPage):
+                total += page.editor.pending
+        return total
+
+    def current_editor(self) -> GridEditor | None:
+        page = self.tabs.currentWidget()
+        return page.editor if isinstance(page, TableTab | _GridPage) else None
 
     def clear(self) -> None:
         """Remove the statement results; the open table tabs stay."""
@@ -167,6 +237,7 @@ class ResultsPanel(QWidget):
             self.tabs.setCurrentWidget(existing)
             return existing
         tab = create()
+        tab.set_editing(self._editing)
         self._table_tabs[key] = tab
         index = self.tabs.addTab(tab, "▦ " + title)
         self.tabs.setTabToolTip(index, tab.reference)
@@ -178,11 +249,25 @@ class ResultsPanel(QWidget):
     def _close_requested(self, index: int) -> None:
         page = self.tabs.widget(index)
         if isinstance(page, TableTab):
+            if page.pending and not self._confirm_discard(page.pending):
+                return
             self._table_tabs.pop(page.table.key, None)
             page.shutdown()
             self.tabs.removeTab(index)
             page.deleteLater()
             self._sync_hint()
+
+    def _confirm_discard(self, count: int) -> bool:
+        answer = QMessageBox.question(
+            self,
+            tr("Discard the changes?"),
+            tr("This tab has {n} changes that were not applied.", n=count)
+            + "\n\n"
+            + tr("Close it and discard them?"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
 
     def shutdown(self) -> None:
         for tab in self._table_tabs.values():
@@ -196,7 +281,9 @@ class ResultsPanel(QWidget):
         if outcome.outcome is Outcome.OK and outcome.result is not None:
             result = outcome.result
             if result.returns_rows or statement.keyword in _ROW_STATEMENTS:
-                page: QWidget = _GridPage(result)
+                grid_page = _GridPage(result, statement, self._editing)
+                grid_page.editor.applied.connect(lambda s=statement: self.rerunRequested.emit(s))
+                page: QWidget = grid_page
                 label = tr("Result {n}", n=number)
             else:
                 detail = _seconds(result.duration)

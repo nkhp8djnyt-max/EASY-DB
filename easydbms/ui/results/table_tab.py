@@ -21,8 +21,10 @@ from PySide6.QtWidgets import (
 from ...core.browse import FilterError, page_sql
 from ...core.db import QueryResult
 from ...core.dialects import Dialect
+from ...core.editing import EditTarget, ReadOnly, target_for_table
 from ...core.schema import Table
 from ..i18n import tr
+from .editing import EditingContext, GridEditor
 from .grid import ResultGrid
 from .model import ResultTableModel
 
@@ -44,6 +46,8 @@ class TableTab(QWidget):
         loader: PageLoader,
         page_size: Callable[[], int],
         parent: QWidget | None = None,
+        *,
+        editing: EditingContext | None = None,
     ) -> None:
         super().__init__(parent)
         self.table = table
@@ -59,6 +63,7 @@ class TableTab(QWidget):
         self._shown_rows = 0
         self._loading = False
         self.alive = True
+        self._editing = editing
         self._build()
         self._arrived.connect(self._on_arrived)
 
@@ -75,7 +80,9 @@ class TableTab(QWidget):
         self.reload_button = self._button("⟳", tr("Reload this page"))
         self.prev_button = self._button("◀", tr("Previous page"))
         self.next_button = self._button("▶", tr("Next page"))
-        self.reload_button.clicked.connect(self.reload)
+        self.reload_button.clicked.connect(self._on_reload_clicked)
+        self.add_button = self._button("+", tr("New row (Ctrl+N)"))
+        self.add_button.clicked.connect(self._add_row)
         self.prev_button.clicked.connect(self.previous_page)
         self.next_button.clicked.connect(self.next_page)
         self.filter_edit = QLineEdit()
@@ -87,7 +94,7 @@ class TableTab(QWidget):
         )
         self.summary = QLabel()
         self.summary.setProperty("muted", True)
-        for widget in (self.reload_button, self.prev_button, self.next_button):
+        for widget in (self.reload_button, self.prev_button, self.next_button, self.add_button):
             bar.addWidget(widget)
         bar.addWidget(self.filter_edit, 1)
         bar.addWidget(self.summary)
@@ -107,6 +114,10 @@ class TableTab(QWidget):
         self._message.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self._pages.addWidget(self._message)
         layout.addWidget(host, 1)
+        self.editor = GridEditor(self.grid, self._editing)
+        self.editor.applied.connect(self.reload)
+        self.editor.reloadRequested.connect(self.reload)
+        layout.addWidget(self.editor.bar)
         self._sync_buttons()
 
     @staticmethod
@@ -180,6 +191,37 @@ class TableTab(QWidget):
     def reload(self) -> None:
         self.load(self._offset)
 
+    def _add_row(self) -> None:
+        self.editor.add_row()
+
+    def _on_reload_clicked(self) -> None:
+        """Reload; with pending changes they are kept and measured against the fresh rows."""
+        if self.editor.pending:
+            self.editor.request_reload()
+        else:
+            self.reload()
+
+    def set_editing(self, editing: EditingContext | None) -> None:
+        self._editing = editing
+        self.editor.context = editing
+
+    @property
+    def pending(self) -> int:
+        """Changes made in this tab and not written yet."""
+        return self.editor.pending
+
+    def _resolve(self, columns: tuple[str, ...]) -> Callable[..., EditTarget | ReadOnly]:
+        def resolve(chosen: object = None) -> EditTarget | ReadOnly:
+            return target_for_table(
+                self.table,
+                self.reference,
+                self._dialect,
+                columns,
+                chosen,  # type: ignore[arg-type]
+            )
+
+        return resolve
+
     def next_page(self) -> None:
         if self._has_next and not self._loading:
             self.load(self._offset + self._page_size())
@@ -228,8 +270,7 @@ class TableTab(QWidget):
             duration=result.duration,
         )
         self._shown_rows = len(page.rows)
-        model = ResultTableModel(page)
-        self.grid.set_result_model(model)
+        self.editor.show_result(page, self._resolve(page.columns), rebase=self.editor.take_rebase())
         header = self.grid.horizontalHeader()
         if self._sort is not None and self._sort[0] in page.columns:
             order = Qt.SortOrder.DescendingOrder if self._sort[1] else Qt.SortOrder.AscendingOrder

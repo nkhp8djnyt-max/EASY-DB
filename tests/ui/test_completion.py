@@ -88,7 +88,7 @@ def test_typing_opens_the_list_after_a_pause(rig: Rig, qtbot: QtBot) -> None:
     open_list(rig, qtbot)
     assert rig.labels()[:2] == ["sel", "SELECT"]
     assert rig.popup.current() is not None
-    assert rig.popup.current().kind is Kind.SNIPPET  # type: ignore[union-attr]
+    assert rig.popup.current().kind is Kind.SNIPPET
 
 
 def test_the_list_follows_what_is_typed(rig: Rig, qtbot: QtBot) -> None:
@@ -319,7 +319,7 @@ def test_a_function_gets_parentheses_and_the_cursor_goes_inside(rig: Rig, qtbot:
     rig.type("SELECT coun")
     open_list(rig, qtbot)
     qtbot.waitUntil(lambda: "COUNT" in rig.labels()[:3])
-    while rig.popup.current().label != "COUNT":  # type: ignore[union-attr]
+    while rig.popup.current().label != "COUNT":
         rig.press(K.Key_Down)
     rig.press(K.Key_Tab)
     assert rig.editor.text() == "SELECT COUNT()"
@@ -343,7 +343,7 @@ def test_an_alias_reopens_the_list_with_its_columns(rig: Rig, qtbot: QtBot) -> N
     rig.press(K.Key_Space, Qt.KeyboardModifier.ControlModifier)
     open_list(rig, qtbot)
     qtbot.waitUntil(lambda: "o" in rig.labels())
-    while rig.popup.current().label != "o":  # type: ignore[union-attr]
+    while rig.popup.current().label != "o":
         rig.press(K.Key_Down)
     rig.press(K.Key_Tab)
     assert rig.editor.text() == "SELECT o. FROM orders o"
@@ -353,7 +353,7 @@ def test_an_alias_reopens_the_list_with_its_columns(rig: Rig, qtbot: QtBot) -> N
 def test_the_join_condition_is_inserted_whole(rig: Rig, qtbot: QtBot) -> None:
     rig.type("SELECT * FROM orders o JOIN customers c ON ")
     open_list(rig, qtbot)
-    assert rig.popup.current().kind is Kind.JOIN  # type: ignore[union-attr]
+    assert rig.popup.current().kind is Kind.JOIN
     rig.press(K.Key_Tab)
     assert rig.editor.text().endswith("ON o.customer_id = c.id")
 
@@ -365,7 +365,7 @@ def test_star_expansion_replaces_the_star(rig: Rig, qtbot: QtBot) -> None:
     rig.editor.setTextCursor(cursor)
     rig.press(K.Key_Space, Qt.KeyboardModifier.ControlModifier)
     open_list(rig, qtbot)
-    assert rig.popup.current().kind is Kind.STAR  # type: ignore[union-attr]
+    assert rig.popup.current().kind is Kind.STAR
     rig.press(K.Key_Tab)
     assert rig.editor.text() == "SELECT id, name, email, created_at FROM customers"
 

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from .autocomplete import UsageStore
 from .connections import ConnectionStore, SecretStore, choose_secret_store
+from .editing import EditKeyStore
 from .erd import ErdLayoutStore
 from .paths import AppPaths
 from .queries import QueryTabStore
@@ -26,6 +27,7 @@ class Services:
     tab_store: QueryTabStore
     erd_store: ErdLayoutStore
     usage_store: UsageStore
+    edit_keys: EditKeyStore
 
     def close(self) -> None:
         self.manager.close_all()
@@ -58,4 +60,5 @@ def build_services(
         tab_store=QueryTabStore(db),
         erd_store=ErdLayoutStore(db),
         usage_store=UsageStore(db),
+        edit_keys=EditKeyStore(db),
     )

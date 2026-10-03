@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -96,6 +96,15 @@ class SqliteClient(DatabaseClient):
             return columns, rows[:max_rows], None, len(rows) > max_rows
         finally:
             cursor.close()
+
+    def _run_bound(self, raw: Any, sql: str, params: Sequence[Any]) -> int:
+        cursor = raw.execute(sql, tuple(params))
+        try:
+            return int(cursor.rowcount)
+        finally:
+            cursor.close()
+
+    _begin_sql = "BEGIN IMMEDIATE"  # take the write lock now, not half way through
 
     # ------------------------------------------------------------------ errors
 

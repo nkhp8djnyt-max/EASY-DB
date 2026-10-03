@@ -5,15 +5,18 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtGui import QAction
+from PySide6.QtWidgets import QMenu, QMessageBox
 from pytestqt.qtbot import QtBot
 
 from easydbms.core.connections import VaultSecretStore
 from easydbms.core.paths import AppPaths
+from easydbms.core.schema import TableKey
 from easydbms.core.services import build_services
 from easydbms.core.session import SessionState
 from easydbms.core.storage import SettingsStore
 from easydbms.ui.connection_dialog import ConnectionDialog
 from easydbms.ui.main_window import MainWindow
+from easydbms.ui.results import TableTab
 from easydbms.ui.runtime import BackgroundRunner, EventBridge
 from easydbms.ui.theme import current_tokens
 
@@ -678,12 +681,9 @@ def test_changing_the_theme_recolours_the_diagram(env: Env, qtbot: QtBot) -> Non
 def test_the_keyword_case_menu_persists_the_choice(env: Env, qtbot: QtBot) -> None:
     window = make_window(env, qtbot)
     assert SettingsStore(env.services.paths.settings_file).load().keyword_case == "upper"
-    case_menu = next(
-        a.menu()
-        for a in menu_action_list(window, "&Query")
-        if a.menu() is not None and a.text() == "Keyword case"
-    )
-    assert case_menu is not None
+    submenu = next(a for a in menu_action_list(window, "&Query") if a.text() == "Keyword case")
+    case_menu = submenu.menu()
+    assert isinstance(case_menu, QMenu)
     actions = case_menu.actions()
     assert [a.isChecked() for a in actions] == [True, False, False]
     actions[1].trigger()
@@ -695,8 +695,9 @@ def test_the_keyword_case_menu_persists_the_choice(env: Env, qtbot: QtBot) -> No
 
 def menu_action_list(window: MainWindow, menu: str) -> list[QAction]:
     for action in window.menuBar().actions():
-        if action.text() == menu and action.menu() is not None:
-            return action.menu().actions()  # type: ignore[union-attr]
+        found = action.menu()
+        if action.text() == menu and isinstance(found, QMenu):
+            return found.actions()
     raise AssertionError(menu)
 
 
@@ -745,4 +746,85 @@ def test_usage_of_connections_that_vanished_is_pruned_at_startup(env: Env, qtbot
     env.services.usage_store.record("gone", "a")
     make_window(env, qtbot)
     rows = env.services.db.execute("SELECT DISTINCT connection_id FROM completion_usage")
+    assert rows == [(kept.id,)]
+
+
+# ---------------------------------------------------------------------------- editing results
+
+
+def open_book(window: MainWindow, env: Env, qtbot: QtBot) -> TableTab:
+    config = add_shop(env, "Shop", rows=3)
+    window.activate(config.id)
+    qtbot.waitUntil(lambda: window.left.currentWidget() is window.workspaces, timeout=10000)
+    workspace = window.current_workspace()
+    assert workspace is not None
+    session = env.services.manager.session(config.id)
+    assert session is not None
+    qtbot.waitUntil(lambda: session.schema is not None, timeout=10000)
+    table = session.schema.find("book")  # type: ignore[union-attr]
+    tab = workspace.open_table(table)  # type: ignore[arg-type]
+    assert tab is not None
+    qtbot.waitUntil(lambda: not tab._loading, timeout=10000)
+    return tab
+
+
+def test_the_query_menu_has_apply_changes_on_alt_s(
+    env: Env, qtbot: QtBot, prompts: Prompts
+) -> None:
+    window = make_window(env, qtbot)
+    action = menu_action(window, "&Query", "Apply &changes")
+    assert action.shortcut().toString() == "Alt+S"
+    tab = open_book(window, env, qtbot)
+    model = tab.grid.model()
+    model.edit_cell_text(0, 2, "From the menu")  # type: ignore[attr-defined]
+    action.trigger()
+    qtbot.waitUntil(lambda: tab.pending == 0, timeout=10000)
+    assert len(prompts.previews) == 1
+    assert tab.grid.model().value(0, 2) == "From the menu"  # type: ignore[attr-defined]
+
+
+def test_apply_changes_does_nothing_without_a_workspace(env: Env, qtbot: QtBot) -> None:
+    window = make_window(env, qtbot)
+    menu_action(window, "&Query", "Apply &changes").trigger()  # no connection yet: must not raise
+
+
+def test_quitting_with_unapplied_changes_asks(env: Env, qtbot: QtBot, prompts: Prompts) -> None:
+    window = make_window(env, qtbot)
+    tab = open_book(window, env, qtbot)
+    tab.grid.model().edit_cell_text(0, 2, "unsaved")  # type: ignore[attr-defined]
+    prompts.question_answer = QMessageBox.StandardButton.No
+    window.close()
+    assert window.isVisible()  # still open
+    assert "not applied" in prompts.questions[-1]
+    assert not window._closed
+    prompts.question_answer = QMessageBox.StandardButton.Yes
+    window.close()
+    assert window._closed
+
+
+def test_quitting_without_changes_does_not_ask(env: Env, qtbot: QtBot, prompts: Prompts) -> None:
+    window = make_window(env, qtbot)
+    open_book(window, env, qtbot)
+    window.close()
+    assert prompts.questions == []
+    assert window._closed
+
+
+def test_deleting_a_connection_forgets_its_chosen_key_columns(env: Env, qtbot: QtBot) -> None:
+    config = env.add_sqlite("Shop")
+    window = make_window(env, qtbot)
+    window.activate(config.id)
+    qtbot.waitUntil(lambda: config.id in window._workspaces, timeout=10000)
+    env.services.edit_keys.set(config.id, TableKey("main", "stock"), ["sku"])
+    env.services.store.remove(config.id)
+    window._refresh()
+    assert env.services.edit_keys.get(config.id, TableKey("main", "stock")) is None
+
+
+def test_chosen_keys_of_vanished_connections_are_pruned_at_startup(env: Env, qtbot: QtBot) -> None:
+    kept = env.add_sqlite("Kept")
+    env.services.edit_keys.set(kept.id, TableKey("main", "t"), ["a"])
+    env.services.edit_keys.set("gone", TableKey("main", "t"), ["a"])
+    make_window(env, qtbot)
+    rows = env.services.db.execute("SELECT DISTINCT connection_id FROM edit_keys")
     assert rows == [(kept.id,)]
