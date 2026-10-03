@@ -6,6 +6,7 @@ from easydbms.core.connections import (
     ConnectionUrlError,
     FileConnection,
     ServerConnection,
+    SslMode,
     build_connection_url,
     parse_connection_url,
 )
@@ -35,7 +36,8 @@ def test_full_postgresql_url() -> None:
         6543,
     )
     assert (config.user, config.database) == ("app", "shop")
-    assert config.options == {"sslmode": "require"}
+    assert config.ssl.mode is SslMode.REQUIRE  # TLS options become settings of their own
+    assert config.options == {}
     assert parsed.password == "s3cret"
     assert config.name == "app@shop"
 

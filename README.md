@@ -4,11 +4,18 @@ Desktop database client in Python: SQL editor, ERD, editable result grid. Suppor
 dialects: **PostgreSQL**, **MySQL** (including MariaDB) and **SQLite**. Corporate dialects
 (SQL Server, Oracle) are intentionally out of scope.
 
-**Status: stage 5 of 7 — editable grid.** Connect, write SQL (with autocomplete) in tabs, run it, see the
-database as an ER diagram — and now **change data in the grid**: double-click or `F2` a cell, `Ctrl+N` a new
-row, `Del` a row. Nothing is written until you press `Alt+S`: you review the generated `UPDATE` / `INSERT` /
-`DELETE`, and everything is applied in one transaction (all of it, or none). SSL, SSH tunnels and
-`~/.pgpass` are the next stage (see [Roadmap](#roadmap)).
+**Status: stage 6 of 7 — secure connections.** Everything from before (SQL editor with autocomplete, ER diagram,
+editable grid) now also works **through SSL/TLS, an SSH tunnel (with a jump host) and the PostgreSQL
+`~/.pgpass` / `pg_service.conf` files**. *Test connection* walks the whole path — service file, password source,
+SSH jump host, SSH login, tunnel, TLS files, encryption, login, test query — and says which step broke and why.
+Cloud providers, history and packaging are the last stage (see [Roadmap](#roadmap)).
+
+| TLS: modes and certificate files | SSH tunnel with a jump host | A test through the tunnel |
+|---|---|---|
+| ![](docs/screenshots/stage6-ssl.png) | ![](docs/screenshots/stage6-ssh.png) | ![](docs/screenshots/stage6-tunnel-test.png) |
+
+More: [an SSH server nobody trusted yet — fingerprint and a *Trust this server…* button](docs/screenshots/stage6-trust.png),
+[light theme, Russian UI](docs/screenshots/stage6-ssh-light-ru.png).
 
 | Pending changes | Review before writing | Someone else changed the row |
 |---|---|---|
@@ -59,6 +66,40 @@ import simd; print(simd.status())"` shows what is active.
 Config lives in the per-user config directory (`connections.json`, `settings.toml`, `vault.json`)
 and data in the per-user data directory (`app.db`). Set `EASYDBMS_HOME=/some/dir` to keep
 everything in one place (portable installs, experiments).
+
+## What stage 6 does
+
+- **SSL / TLS** (PostgreSQL and MySQL/MariaDB). Modes `disable`, `allow` (PostgreSQL), `prefer`, `require`,
+  `verify-ca`, `verify-full` plus a CA bundle, a client certificate and key (the key's passphrase is a secret,
+  never saved in the JSON). The same settings are accepted as URL parameters (`?sslmode=…&sslrootcert=…`, MySQL's
+  `ssl_ca` / `ssl_mode`) and old `options` are migrated. The test looks at the files *before* connecting — missing,
+  not a certificate, expired (with the date), key of another certificate, encrypted key without / with the wrong
+  passphrase — and afterwards reports what the server really negotiated (`TLSv1.3 · TLS_AES_256_GCM_SHA384`).
+- **SSH tunnel.** Password, private key (+ passphrase) or ssh-agent; optionally through a **jump host**. It is opened
+  automatically before the database connection and closed after disconnect (also when connecting fails or is
+  abandoned). The connection keeps the real host name — TLS verifies the certificate against it and `~/.pgpass`
+  is looked up by it — while only the socket goes to the tunnel's local port (`hostaddr` for libpq, a pre-made
+  socket for PyMySQL). A session's second ("meta") connection shares the same tunnel: no second login.
+- **Host keys are checked before any credential is sent.** Our own `known_hosts` (OpenSSH format, in the config
+  directory) plus the read-only `~/.ssh/known_hosts`. An unknown server is **never** accepted silently: the test
+  report and the connection error page show its fingerprint and a *Trust this server…* button; a **changed** key
+  is refused with a warning.
+- **`~/.pgpass`** (honours `PGPASSFILE`, `%APPDATA%\postgresql\pgpass.conf` on Windows): wildcards, `\:` / `\\`
+  escapes, first match wins, and — like libpq — a file other users can read is ignored (with the `chmod 0600`
+  hint). The form shows whether the file knows the connection, never the password. A password that is saved or
+  typed wins; the dialog does not ask when `~/.pgpass` or the service already has one.
+- **`pg_service.conf`** (`PGSERVICEFILE`, `~/.pg_service.conf`, `PGSYSCONFDIR`): name a *service* in the connection
+  and the host, port, user, database, TLS settings and extra libpq parameters it defines fill in whatever the
+  connection leaves empty (what the connection says wins). The host may stay empty.
+- **Secrets** (database password, SSH password / key passphrase, jump-host ones, TLS key passphrase) live only in the
+  keyring / encrypted vault — or in memory for this run if *Save* is off — and are asked for when missing. Nothing
+  secret reaches `connections.json`, URLs or logs; deleting a connection forgets all of them, switching the login
+  method forgets the old secret.
+- **Diagnostics.** Steps: `Service file`, `Password source`, `SSH jump host`, `SSH login`, `SSH tunnel`, `TLS files`,
+  `Encryption`, then the usual `DNS`/`TCP` (skipped behind a tunnel — the SSH steps proved the way), `Sign in`,
+  `Test query`. Failures come with advice: wrong SSH password / key, the SSH server cannot reach the database
+  ("check them from the SSH server's point of view"), forwarding prohibited, undefined `${VAR}`, unknown service.
+- `${ENV}` placeholders are expanded in the service name, TLS file paths and SSH host / user / key file too.
 
 ## What stage 5 does
 
@@ -338,9 +379,12 @@ easydbms/
 ├─ core/                    # no Qt
 │  ├─ dialects/             # PostgreSQL / MySQL / SQLite: quoting, literals, lexer, splitter,
 │  │                        #   formatter, translator, vocabulary, type classification
-│  ├─ db/                   # DatabaseClient + PostgresClient, MySqlClient, SqliteClient, errors
-│  ├─ connections/          # ConnectionConfig, URL parser, ${ENV}, secret stores, store
-│  ├─ session/              # Session (query lane + meta lane, schema events), ConnectionManager
+│  ├─ db/                   # DatabaseClient + PostgresClient, MySqlClient, SqliteClient, errors, TLS files / driver mapping
+│  ├─ connections/          # ConnectionConfig (+ SSL / SSH settings), URL parser, ${ENV}, secret stores, store,
+│  │                        #   ~/.pgpass + pg_service.conf, `complete()` (service / password sources)
+│  ├─ ssh/                  # SshTunnel (paramiko; password / key / agent, jump host), known_hosts trust
+│  ├─ session/              # Session (query lane + meta lane, schema events), ConnectionManager,
+│  │                        #   connector (prepare = service + secrets + tunnel; check_connection)
 │  ├─ schema/               # Table / Column / ForeignKey / Index model + per-dialect introspection
 │  ├─ erd/                  # relations, cardinality, layered layout, edge routing, saved positions
 │  ├─ browse/               # SQL for paging, sorting and filtering a table
@@ -435,6 +479,22 @@ Without those variables the server cases are skipped. GUI tests use `pytest-qt` 
 `offscreen` platform; on a bare Linux box Qt needs `libegl1 libgl1 libxkbcommon0 libfontconfig1
 libdbus-1-3` installed.
 
+### Testing TLS and SSH
+
+`tests/support/` holds an in-process SSH server, ssh-agent and a throw-away PKI, so the SSH tunnel and TLS-file tests
+need nothing installed. To run the TLS tests against real servers, generate certificates and point both servers at
+them:
+
+```bash
+python -m tests.support.certs /tmp/pki      # ca.pem, server.pem/.key, client.pem/.key (CN erd_cert), client-encrypted.key, other-ca.pem
+export EASYDBMS_TEST_TLS_DIR=/tmp/pki
+```
+
+PostgreSQL: `ssl = on`, `ssl_cert_file` / `ssl_key_file` = `server.pem` / `server.key`, `ssl_ca_file = ca.pem`, a
+`hostssl <db> erd_cert 127.0.0.1/32 cert` line in `pg_hba.conf` and `CREATE ROLE erd_cert LOGIN`.
+MariaDB: `ssl_ca` / `ssl_cert` / `ssl_key` in `[mysqld]` and `CREATE USER erd_cert@'%' REQUIRE X509`. Without
+`EASYDBMS_TEST_TLS_DIR` those tests are skipped; the tunnel-to-a-real-database tests run whenever the server URLs above are set.
+
 ## Roadmap
 
 1. ✅ **Connections** — models, URL parsing, secrets, PostgreSQL/MySQL/SQLite clients, dialog,
@@ -444,5 +504,5 @@ libdbus-1-3` installed.
 3. ✅ **Schema introspection, ERD pane, table tabs**, `Ctrl+P` go to table, schema benchmarks.
 4. ✅ **Autocomplete** (keywords → tables → columns → aliases → JOIN by FK), snippets, usage ranking.
 5. ✅ **Editable grid**: change set, review (Alt+S), one transaction, optimistic locking, key columns.
-6. SSL, SSH tunnel, `~/.pgpass` / `pg_service.conf`.
+6. ✅ **SSL / TLS, SSH tunnel** (password / key / agent, jump host, host-key trust), **`~/.pgpass`** and **`pg_service.conf`**.
 7. Cloud providers, history and saved queries, ERD export, packaging.

@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.session import Session, SessionState
+from ..core.ssh import SshHostKeyUnknown
 from .failure_hints import hint_for
 from .i18n import tr
 
@@ -28,6 +29,7 @@ class SessionPanel(QWidget):
     editRequested = Signal(str)
     disconnectRequested = Signal(str)
     cancelRequested = Signal(str)
+    trustRequested = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -113,10 +115,13 @@ class SessionPanel(QWidget):
         retry.clicked.connect(lambda: self._emit_id(self.retryRequested))
         edit = QPushButton(tr("Edit connection…"))
         edit.clicked.connect(lambda: self._emit_id(self.editRequested))
+        self._trust_button = QPushButton(tr("Trust this server…"))
+        self._trust_button.clicked.connect(lambda: self._emit_id(self.trustRequested))
         layout.addWidget(self._error_title)
         layout.addWidget(self._error_message)
         layout.addWidget(self._error_hint)
         row = QHBoxLayout()
+        row.addWidget(self._trust_button)
         row.addWidget(retry)
         row.addWidget(edit)
         row.addStretch(1)
@@ -176,6 +181,7 @@ class SessionPanel(QWidget):
             hint = hint_for(session.error)
             self._error_hint.setText(hint)
             self._error_hint.setVisible(bool(hint))
+            self._trust_button.setVisible(isinstance(session.error, SshHostKeyUnknown))
             self._stack.setCurrentWidget(self._error)
         elif session.state is SessionState.READY:
             self._fill_ready(session)
@@ -185,6 +191,7 @@ class SessionPanel(QWidget):
             self._error_title.setText(tr("{name} is not connected", name=config.name))
             self._error_message.setText("")
             self._error_hint.setText("")
+            self._trust_button.hide()
             self._stack.setCurrentWidget(self._error)
 
     def _fill_ready(self, session: Session) -> None:

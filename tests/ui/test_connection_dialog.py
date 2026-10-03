@@ -337,9 +337,10 @@ def test_connect_saves_and_requests_the_connection(env: Env, qtbot: QtBot) -> No
     fill_new_postgres(dialog)
     with qtbot.waitSignal(dialog.connectRequested) as signal:
         dialog.connect_button.click()
-    connection_id, typed = signal.args
+    connection_id, typed, secrets = signal.args
     assert env.services.store.get(connection_id).name == "Shop"
     assert typed is None  # saved passwords are read from the store, not passed around
+    assert secrets == {}
     assert not dialog.isVisible()  # the dialog closes
 
 
@@ -349,8 +350,9 @@ def test_connect_passes_a_password_that_is_not_saved(env: Env, qtbot: QtBot) -> 
     dialog.form.save_password_check.setChecked(False)
     with qtbot.waitSignal(dialog.connectRequested) as signal:
         dialog.connect_button.click()
-    connection_id, typed = signal.args
+    connection_id, typed, secrets = signal.args
     assert typed == "only-this-run"
+    assert secrets == {}
     assert env.secrets.get(connection_id) is None
 
 

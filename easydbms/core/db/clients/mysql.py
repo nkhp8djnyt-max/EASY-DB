@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import contextlib
+import socket
+import ssl
 from collections.abc import Callable, Sequence
 from typing import Any
 
@@ -10,7 +12,7 @@ import pymysql
 from pymysql.constants import CLIENT
 from pymysql.cursors import SSCursor
 
-from ...connections import ServerConnection
+from ...connections import ServerConnection, SslMode
 from ..base import DatabaseClient, RawResult
 from ..diagnostics import DEFAULT_TIMEOUT, network_steps
 from ..errors import (
@@ -28,6 +30,8 @@ from ..errors import (
     ReadOnlyViolation,
     SslError,
 )
+from ..runtime import ConnectRuntime
+from ..tls import check_files, file_steps, mysql_ssl
 
 _QUERY_INTERRUPTED = 1317
 _READ_ONLY = {1792, 1836}
@@ -63,8 +67,13 @@ def _convert_options(options: dict[str, str]) -> dict[str, Any]:
 
 
 class MySqlClient(DatabaseClient):
-    def __init__(self, config: ServerConnection, password: str | None = None) -> None:
-        super().__init__(config, password)
+    def __init__(
+        self,
+        config: ServerConnection,
+        password: str | None = None,
+        runtime: ConnectRuntime | None = None,
+    ) -> None:
+        super().__init__(config, password, runtime)
         self._server_config = config
 
     def _connect_kwargs(self) -> dict[str, Any]:
@@ -92,8 +101,44 @@ class MySqlClient(DatabaseClient):
         kwargs.update(_convert_options(config.options))
         return kwargs
 
+    def _new_connection(self) -> Any:
+        """A connection with this client's TLS settings, through the SSH tunnel if there is one."""
+        ssl_config = self._server_config.ssl
+        kwargs = self._connect_kwargs()
+        if ssl_config.mode is SslMode.DISABLE:
+            kwargs["ssl_disabled"] = True
+        else:
+            context = mysql_ssl(ssl_config, self._runtime.ssl_key_password)
+            if context is not None:
+                kwargs["ssl"] = context
+        route = self._runtime.route
+        if route is None:
+            return pymysql.connect(autocommit=True, **kwargs)
+        # Connect the socket ourselves: ``host`` stays the server's name, which is what the TLS
+        # certificate is checked against, while the bytes travel through the tunnel.
+        sock = socket.create_connection((route.host, route.port), kwargs["connect_timeout"])
+        connection = pymysql.connect(autocommit=True, defer_connect=True, **kwargs)
+        try:
+            connection.connect(sock)
+        except BaseException:
+            sock.close()
+            raise
+        return connection
+
     def _open(self) -> Any:
-        return pymysql.connect(autocommit=True, **self._connect_kwargs())
+        if self._server_config.ssl.mode is not SslMode.DISABLE:
+            check_files(self._server_config.ssl, self._runtime.ssl_key_password)
+        return self._new_connection()
+
+    def _tls_file_steps(self) -> list[tuple[str, Callable[[], str]]]:
+        return file_steps(self._server_config.ssl, self._runtime.ssl_key_password)
+
+    def _tls_summary(self, raw: Any) -> str | None:
+        sock = getattr(raw, "_sock", None)
+        if not isinstance(sock, ssl.SSLSocket):
+            return "not encrypted"
+        cipher = sock.cipher()
+        return f"{sock.version()} · {cipher[0]}" if cipher else str(sock.version())
 
     def _close(self, raw: Any) -> None:
         raw.close()
@@ -102,6 +147,8 @@ class MySqlClient(DatabaseClient):
         return str(raw.get_server_info())
 
     def _network_steps(self) -> list[tuple[str, Callable[[], str]]]:
+        if self._runtime.route is not None:
+            return []  # the SSH steps already proved the way to the server
         raw_timeout = self._server_config.options.get("connect_timeout", str(DEFAULT_TIMEOUT))
         try:
             timeout = float(raw_timeout)
@@ -111,7 +158,7 @@ class MySqlClient(DatabaseClient):
 
     def _cancel(self, raw: Any) -> None:
         """``KILL QUERY`` from a second connection: MySQL has no in-band cancel."""
-        control = pymysql.connect(autocommit=True, **self._connect_kwargs())
+        control = self._new_connection()
         try:
             control.cursor().execute(f"KILL QUERY {int(raw.thread_id())}")
         finally:

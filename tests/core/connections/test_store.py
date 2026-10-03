@@ -84,11 +84,11 @@ def test_groups(tmp_path: Path) -> None:
 def test_file_holds_no_secrets_and_leaves_no_temp_files(tmp_path: Path) -> None:
     path = tmp_path / "c.json"
     store = ConnectionStore(path)
-    store.save(pg(options={"sslmode": "require"}))
+    store.save(pg(options={"connect_timeout": "5"}))
     document = json.loads(path.read_text())
     assert document["version"] == 1
     assert "password" not in path.read_text().lower().replace("save_password", "")
-    assert document["connections"][0]["options"] == {"sslmode": "require"}
+    assert document["connections"][0]["options"] == {"connect_timeout": "5"}
     assert [p.name for p in tmp_path.iterdir()] == ["c.json"]
 
 

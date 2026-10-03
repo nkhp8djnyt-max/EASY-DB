@@ -73,7 +73,7 @@ def test_production_connections_are_red_unless_coloured() -> None:
 
 
 def test_option_names_must_not_be_blank() -> None:
-    assert server(options={"sslmode": "require"}).options == {"sslmode": "require"}
+    assert server(options={"connect_timeout": "5"}).options == {"connect_timeout": "5"}
     with pytest.raises(ValidationError):
         server(options={" ": "x"})
 

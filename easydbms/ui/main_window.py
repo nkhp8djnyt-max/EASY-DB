@@ -24,7 +24,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..core.connections import ServerConnection
+from ..core.connections import (
+    JUMP_PASSPHRASE,
+    JUMP_PASSWORD,
+    PASSWORD,
+    SSH_PASSPHRASE,
+    SSH_PASSWORD,
+    SSL_KEY_PASSWORD,
+    ServerConnection,
+)
 from ..core.schema import Table
 from ..core.services import Services
 from ..core.session import (
@@ -34,6 +42,7 @@ from ..core.session import (
     SessionState,
     SessionStateChanged,
 )
+from ..core.ssh import SshHostKeyUnknown
 from .connection_dialog import ConnectionDialog
 from .db_switcher import DbSwitcher
 from .erd import ErdPane
@@ -50,6 +59,19 @@ _GEOMETRY_KEY = "window/geometry"
 _SPLITTER_KEY = "window/splitter"
 _ERD_COLLAPSED_KEY = "window/erd_collapsed"
 _COLLAPSED_WIDTH = 300
+
+
+def _secret_prompt(field: str, name: str) -> str:
+    """What to ask for when the secret ``field`` of connection ``name`` is missing."""
+    prompts = {
+        PASSWORD: tr("Password for {name}:", name=name),
+        SSH_PASSWORD: tr("SSH password for {name}:", name=name),
+        SSH_PASSPHRASE: tr("Passphrase of the SSH key for {name}:", name=name),
+        JUMP_PASSWORD: tr("Jump host password for {name}:", name=name),
+        JUMP_PASSPHRASE: tr("Passphrase of the jump host key for {name}:", name=name),
+        SSL_KEY_PASSWORD: tr("Passphrase of the TLS client key for {name}:", name=name),
+    }
+    return prompts.get(field, tr("Secret for {name}:", name=name))
 
 
 class MainWindow(QMainWindow):
@@ -203,6 +225,7 @@ class MainWindow(QMainWindow):
         self.panel.retryRequested.connect(self.activate)
         self.panel.editRequested.connect(lambda cid: self.open_connections(cid))
         self.panel.disconnectRequested.connect(self._services.manager.disconnect)
+        self.panel.trustRequested.connect(self._trust_host)
         self.panel.cancelRequested.connect(self._services.manager.disconnect)
         self.left.addWidget(self.panel)
         self.left.addWidget(self.workspaces)
@@ -267,29 +290,67 @@ class MainWindow(QMainWindow):
         """Make a saved connection active, asking for what it needs first (non-blocking after)."""
         self._activate(connection_id, None)
 
-    def _connect_from_dialog(self, connection_id: str, password: object) -> None:
-        self._activate(connection_id, password if isinstance(password, str) else None)
+    def _connect_from_dialog(
+        self, connection_id: str, password: object, secrets: object = None
+    ) -> None:
+        self._activate(
+            connection_id,
+            password if isinstance(password, str) else None,
+            dict(secrets) if isinstance(secrets, dict) else None,
+        )
 
-    def _activate(self, connection_id: str, password: str | None) -> None:
+    def _activate(
+        self, connection_id: str, password: str | None, secrets: dict[str, str] | None = None
+    ) -> None:
         config = self._services.store.find(connection_id)
         if config is None:
             return
         manager = self._services.manager
+        typed_secrets = dict(secrets or {})
         if isinstance(config, ServerConnection):
             if config.save_password and not ensure_unlocked(self._services.secrets, self):
                 self._status_label.setText(tr("The password store stayed locked."))
                 return
-            if password is None and manager.needs_password(connection_id):
+            if password is not None:
+                manager.remember_password(connection_id, password)
+            for field, value in typed_secrets.items():
+                manager.remember_secret(connection_id, field, value)
+            for field in manager.missing_secrets(connection_id):
                 typed, accepted = QInputDialog.getText(
                     self,
                     tr("Password required"),
-                    tr("Password for {name}:", name=config.name),
+                    _secret_prompt(field, config.name),
                     QLineEdit.EchoMode.Password,
                 )
                 if not accepted:
                     return
-                password = typed
-        manager.activate(connection_id, password)
+                manager.remember_secret(connection_id, field, typed)
+        manager.activate(connection_id)
+
+    def _trust_host(self, connection_id: str) -> None:
+        """The SSH server's key is unknown: show its fingerprint, and remember it on a yes."""
+        session = self._services.manager.session(connection_id)
+        error = session.error
+        if not isinstance(error, SshHostKeyUnknown):
+            return
+        answer = QMessageBox.question(
+            self,
+            tr("Trust this SSH server?"),
+            tr(
+                "The identity of {host}:{port} is not known yet.\n\n"
+                "{key_type} key fingerprint:\n{fingerprint}\n\n"
+                "Compare it with the one your administrator gave you. Trust this server?",
+                host=error.host,
+                port=error.port,
+                key_type=error.key_type,
+                fingerprint=error.fingerprint,
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer == QMessageBox.StandardButton.Yes:
+            self._services.manager.trust_host_key(error)
+            self._services.manager.connect(connection_id)
 
     def go_to_table(self) -> None:
         """Ctrl+P: pick a table or column of the active connection and show it."""

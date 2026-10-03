@@ -12,6 +12,7 @@ from .erd import ErdLayoutStore
 from .paths import AppPaths
 from .queries import QueryTabStore
 from .session import ConnectionManager, ManagerEvent
+from .ssh import KnownHosts
 from .storage import AppDatabase, AppSettings, SettingsStore
 
 
@@ -55,7 +56,12 @@ def build_services(
         store=store,
         secrets=chosen_secrets,
         manager=ConnectionManager(
-            store, chosen_secrets, listener=listener, environ=environ, load_schema=True
+            store,
+            chosen_secrets,
+            listener=listener,
+            environ=environ,
+            load_schema=True,
+            known_hosts=KnownHosts(paths.known_hosts_file),
         ),
         tab_store=QueryTabStore(db),
         erd_store=ErdLayoutStore(db),

@@ -1,8 +1,8 @@
 """Open connections and the active one."""
 
+from .connector import ClientFactory, Prepared, check_connection, prepare
 from .manager import ActiveChanged, ConnectionManager, ManagerEvent
 from .session import (
-    ClientFactory,
     SchemaChanged,
     SchemaState,
     Session,
@@ -16,10 +16,13 @@ __all__ = [
     "ClientFactory",
     "ConnectionManager",
     "ManagerEvent",
+    "Prepared",
     "SchemaChanged",
     "SchemaState",
     "Session",
     "SessionEvent",
     "SessionState",
     "SessionStateChanged",
+    "check_connection",
+    "prepare",
 ]

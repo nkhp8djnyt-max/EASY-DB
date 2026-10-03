@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import contextlib
-import os
 import uuid
 
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QRect, QSize, Qt, Signal
@@ -25,16 +24,18 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.connections import (
+    ALL_FIELDS,
+    PASSWORD,
     ConnectionStore,
     FileConnection,
     SecretStore,
     SecretStoreError,
     ServerConnection,
-    resolve_config,
 )
-from ..core.db import ConnectionCheck, create_client
+from ..core.db import ConnectionCheck
 from ..core.dialects import DialectId
 from ..core.session import ConnectionManager
+from ..core.ssh import SshHostKeyUnknown
 from .connection_form import DIALECT_LABELS, ConnectionForm, FormError
 from .failure_hints import hint_for
 from .i18n import tr
@@ -56,6 +57,14 @@ def _step_label(name: str) -> str:
         "Query": tr("Test query"),
         "File": tr("Database file"),
         "Open": tr("Open file"),
+        "Settings": tr("Settings"),
+        "Service": tr("Service file"),
+        "Password": tr("Password source"),
+        "SSH jump": tr("SSH jump host"),
+        "SSH": tr("SSH login"),
+        "Tunnel": tr("SSH tunnel"),
+        "TLS files": tr("TLS files"),
+        "TLS": tr("Encryption"),
     }
     return labels.get(name, name)
 
@@ -130,6 +139,9 @@ class TestReport(QFrame):
 
     __test__ = False  # not a pytest test class despite the name
 
+    #: The user wants to trust the SSH server whose key the test reported (a ``SshHostKeyUnknown``).
+    trustRequested = Signal(object)
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setProperty("card", True)
@@ -188,7 +200,20 @@ class TestReport(QFrame):
             hint = hint_for(check.failure)
             if hint:
                 self._line("→", tokens.warning, hint)
+            if isinstance(check.failure, SshHostKeyUnknown):
+                self._trust_button(check.failure)
         self.show()
+
+    def _trust_button(self, error: SshHostKeyUnknown) -> None:
+        self.trust_button = QPushButton(tr("Trust this server…"))
+        self.trust_button.clicked.connect(lambda: self.trustRequested.emit(error))
+        row = QHBoxLayout()
+        row.addWidget(self.trust_button)
+        row.addStretch(1)
+        container = QWidget()
+        container.setLayout(row)
+        row.setContentsMargins(0, 4, 0, 0)
+        self._layout.addWidget(container)
 
     def show_error(self, error: Exception) -> None:
         tokens = current_tokens()
@@ -201,8 +226,9 @@ class TestReport(QFrame):
 
 
 class ConnectionDialog(QDialog):
-    #: ``(connection id, password typed for this run or None)``; the dialog closes after it.
-    connectRequested = Signal(str, object)
+    #: ``(connection id, password typed for this run or None, other typed secrets as a dict)``;
+    #: the dialog closes after it.
+    connectRequested = Signal(str, object, object)
     #: Saved, duplicated or deleted something: refresh anything listing connections.
     connectionsChanged = Signal()
 
@@ -292,6 +318,7 @@ class ConnectionDialog(QDialog):
         self.close_button.clicked.connect(self.close)
         self.list.currentItemChanged.connect(self._on_current_changed)
         self.form.changed.connect(self._on_form_changed)
+        self.report.trustRequested.connect(self._trust_host)
 
     # ------------------------------------------------------------------ list handling
 
@@ -360,17 +387,20 @@ class ConnectionDialog(QDialog):
             and config.save_password
             and self._secret_exists(config.id)
         )
-        self.form.load(config, has_saved_password=has_secret)
+        saved: set[str] = set()
+        if isinstance(config, ServerConnection) and config.save_password:
+            saved = {f for f in ALL_FIELDS if f != PASSWORD and self._secret_exists(config.id, f)}
+        self.form.load(config, has_saved_password=has_secret, saved_secrets=saved)
         self.report.hide()
         self._show_message(None)
         self._dirty = False
         self._update_buttons()
 
-    def _secret_exists(self, connection_id: str) -> bool:
+    def _secret_exists(self, connection_id: str, field: str = PASSWORD) -> bool:
         if self._secrets.locked:
             return False
         try:
-            return self._secrets.get(connection_id) is not None
+            return self._secrets.get(connection_id, field) is not None
         except SecretStoreError:
             return False
 
@@ -462,15 +492,19 @@ class ConnectionDialog(QDialog):
         if config is None:
             return None
         previous = self._store.find(config.id)
-        typed = self.form.password
         if isinstance(config, ServerConnection):
+            applicable = set(self.form.applicable_secret_fields)
+            typed = {f: v for f, v in self.form.secrets.items() if f in applicable}
+            if self.form.password:
+                typed[PASSWORD] = self.form.password
             if config.save_password and typed:
                 if not ensure_unlocked(self._secrets, self):
                     self._show_message(
                         tr("The password was not saved: the password store is locked."), error=True
                     )
                     return None
-                self._secrets.set(config.id, typed)
+                for field, value in typed.items():
+                    self._secrets.set(config.id, value, field)
             elif (
                 not config.save_password
                 and isinstance(previous, ServerConnection)
@@ -478,6 +512,11 @@ class ConnectionDialog(QDialog):
             ):
                 if ensure_unlocked(self._secrets, self):
                     self._secrets.delete_all(config.id)
+            if config.save_password and not self._secrets.locked:
+                for field in ALL_FIELDS:  # secrets of a login method that is no longer used
+                    if field != PASSWORD and field not in applicable:
+                        with contextlib.suppress(SecretStoreError):
+                            self._secrets.delete(config.id, field)
         self._store.save(config)
         if previous is not None and previous != config:
             self._manager.forget(config.id)  # reconnect with the new settings next time
@@ -495,44 +534,72 @@ class ConnectionDialog(QDialog):
         if config is None:
             return
         typed = self.form.password
-        keep_for_session = (
-            typed if isinstance(config, ServerConnection) and not config.save_password else None
-        )
-        self.connectRequested.emit(config.id, keep_for_session or None)
+        keep = isinstance(config, ServerConnection) and not config.save_password
+        applicable = set(self.form.applicable_secret_fields)
+        secrets = {f: v for f, v in self.form.secrets.items() if f in applicable} if keep else {}
+        self.connectRequested.emit(config.id, (typed if keep else None) or None, secrets)
         self.accept()
 
     def _test(self) -> None:
         config = self._read()
         if config is None:
             return
-        proceed, password = self._password_for_test(config)
+        proceed, password, secrets = self._credentials_for_test(config)
         if not proceed:
             return
         self._set_busy(True)
         self.report.show_running()
 
         def work() -> ConnectionCheck:
-            resolved, resolved_password = resolve_config(config, password, os.environ)
-            return create_client(resolved, resolved_password).test()
+            return self._manager.test_connection(config, password, secrets)
 
         self._test_job = self._runner.submit(work, self._on_test_done)
 
-    def _password_for_test(
+    def _credentials_for_test(
         self, config: ServerConnection | FileConnection
-    ) -> tuple[bool, str | None]:
-        """``(proceed, password)``; ``proceed`` is ``False`` if the user declined to unlock."""
+    ) -> tuple[bool, str | None, dict[str, str]]:
+        """``(proceed, password, secrets)``; ``proceed`` is ``False`` if unlocking was declined."""
         if isinstance(config, FileConnection):
-            return True, None
-        if self.form.password:
-            return True, self.form.password
+            return True, None, {}
+        applicable = set(self.form.applicable_secret_fields)
+        secrets: dict[str, str] = {}
+        password: str | None = None
         if config.save_password and self._store.find(config.id) is not None:
             if not ensure_unlocked(self._secrets, self):
-                return False, None
+                return False, None, {}
             try:
-                return True, self._secrets.get(config.id)
+                password = self._secrets.get(config.id)
+                for field in applicable:
+                    saved = self._secrets.get(config.id, field)
+                    if saved:
+                        secrets[field] = saved
             except SecretStoreError:
-                return True, None
-        return True, None
+                pass
+        secrets.update({f: v for f, v in self.form.secrets.items() if f in applicable})
+        return True, self.form.password or password, secrets
+
+    def _trust_host(self, error: object) -> None:
+        """The report found an SSH server nobody trusted yet: ask, remember, test again."""
+        if not isinstance(error, SshHostKeyUnknown):
+            return
+        answer = QMessageBox.question(
+            self,
+            tr("Trust this SSH server?"),
+            tr(
+                "The identity of {host}:{port} is not known yet.\n\n"
+                "{key_type} key fingerprint:\n{fingerprint}\n\n"
+                "Compare it with the one your administrator gave you. Trust this server?",
+                host=error.host,
+                port=error.port,
+                key_type=error.key_type,
+                fingerprint=error.fingerprint,
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer == QMessageBox.StandardButton.Yes:
+            self._manager.trust_host_key(error)
+            self._test()
 
     def _on_test_done(self, check: object, error: Exception | None) -> None:
         self._test_job = None

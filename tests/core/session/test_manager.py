@@ -13,7 +13,7 @@ from easydbms.core.connections import (
     MemorySecretStore,
     VaultSecretStore,
 )
-from easydbms.core.db import ConnectionFailed, DatabaseFileError
+from easydbms.core.db import ConnectionFailed, ConnectRuntime, DatabaseFileError
 from easydbms.core.session import (
     ActiveChanged,
     ConnectionManager,
@@ -108,8 +108,8 @@ def test_a_failed_connection_resolves_to_an_error_session_and_can_be_retried(
 def test_concurrent_connect_requests_share_one_attempt(tmp_path: Path) -> None:
     gate = threading.Event()
 
-    def factory(config: object, password: str | None) -> ScriptedClient:
-        client = ScriptedClient(config, password)  # type: ignore[arg-type]
+    def factory(config: object, password: str | None, runtime: ConnectRuntime) -> ScriptedClient:
+        client = ScriptedClient(config, password, runtime)  # type: ignore[arg-type]
         client.gate = gate
         return client
 
@@ -258,8 +258,8 @@ def test_forget_drops_the_session_and_clears_the_active_selection(
 def test_forget_during_connect_leaves_no_zombie(tmp_path: Path) -> None:
     gate = threading.Event()
 
-    def factory(config: object, password: str | None) -> ScriptedClient:
-        client = ScriptedClient(config, password)  # type: ignore[arg-type]
+    def factory(config: object, password: str | None, runtime: ConnectRuntime) -> ScriptedClient:
+        client = ScriptedClient(config, password, runtime)  # type: ignore[arg-type]
         client.gate = gate
         gate.clear()
         return client
@@ -288,8 +288,8 @@ def test_close_all_disconnects_everything(env: Fixture, tmp_path: Path) -> None:
 
 
 def test_a_connection_error_object_is_delivered_to_listeners(tmp_path: Path) -> None:
-    def factory(config: object, password: str | None) -> ScriptedClient:
-        client = ScriptedClient(config, password)  # type: ignore[arg-type]
+    def factory(config: object, password: str | None, runtime: ConnectRuntime) -> ScriptedClient:
+        client = ScriptedClient(config, password, runtime)  # type: ignore[arg-type]
         client.fail_with = ConnectionFailed("server said no")
         return client
 

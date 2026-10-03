@@ -39,6 +39,18 @@ class SslError(ConnectionFailed):
     """TLS negotiation or certificate verification failed."""
 
 
+class SslFileError(SslError):
+    """A TLS certificate or key file is missing, unreadable, expired or does not match."""
+
+
+class InvalidConnection(ConnectionFailed):
+    """The connection settings cannot be used (undefined ``${VAR}``, unknown service ...)."""
+
+    def __init__(self, message: str, cause: Exception) -> None:
+        super().__init__(message)
+        self.cause = cause
+
+
 class DatabaseFileError(ConnectionFailed):
     """A database file is missing, unreadable or not a database."""
 

@@ -175,7 +175,7 @@ def test_successful_test_report(target: Target) -> None:
     assert all(step.ok for step in check.steps)
     names = [step.name for step in check.steps]
     assert names == (
-        ["DNS", "TCP", "Login", "Query"] if target.is_server else ["File", "Open", "Query"]
+        ["DNS", "TCP", "Login", "TLS", "Query"] if target.is_server else ["File", "Open", "Query"]
     )
     assert check.server_version
     assert check.server_version[0].isdigit()

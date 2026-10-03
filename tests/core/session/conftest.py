@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import sqlite3
 import threading
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from easydbms.core.connections import FileConnection, ServerConnection
-from easydbms.core.db import ConnectionFailed, DatabaseClient, DbError, QueryError
+from easydbms.core.db import ConnectionFailed, ConnectRuntime, DatabaseClient, DbError, QueryError
 from easydbms.core.db.base import RawResult
 from easydbms.core.session import ManagerEvent, Session, SessionState, SessionStateChanged
 
@@ -20,9 +20,12 @@ class ScriptedClient(DatabaseClient):
     created: list[ScriptedClient] = []  # noqa: RUF012 - shared test registry, reset per test
 
     def __init__(
-        self, config: ServerConnection | FileConnection, password: str | None = None
+        self,
+        config: ServerConnection | FileConnection,
+        password: str | None = None,
+        runtime: ConnectRuntime | None = None,
     ) -> None:
-        super().__init__(config, password)
+        super().__init__(config, password, runtime)
         self.password = password
         self.gate = threading.Event()
         self.gate.set()
@@ -91,9 +94,6 @@ def file_config(path: Path | str, name: str = "file", **extra: Any) -> FileConne
 def server_config(name: str = "srv", **extra: Any) -> ServerConnection:
     data = {"name": name, "dialect": "postgresql", "host": "db.invalid", "user": "u"} | extra
     return ServerConnection.model_validate(data)
-
-
-Factory = Callable[[ServerConnection | FileConnection, str | None], DatabaseClient]
 
 
 def state_of(session: Session) -> SessionState:

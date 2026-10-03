@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 from easydbms.core.connections import FileConnection
-from easydbms.core.db import NotConnectedError
+from easydbms.core.db import ConnectRuntime, NotConnectedError
 from easydbms.core.schema import DatabaseSchema
 from easydbms.core.session import SchemaChanged, SchemaState, Session, SessionState
 
@@ -175,8 +175,8 @@ def test_requires_a_ready_session(tmp_path: Path) -> None:
 def test_disconnect_closes_both_connections(tmp_path: Path) -> None:
     created: list[ScriptedClient] = []
 
-    def factory(config: Any, password: str | None) -> ScriptedClient:
-        client = ScriptedClient(config, password)
+    def factory(config: Any, password: str | None, runtime: ConnectRuntime) -> ScriptedClient:
+        client = ScriptedClient(config, password, runtime)
         created.append(client)
         return client
 

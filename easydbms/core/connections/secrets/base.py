@@ -6,6 +6,20 @@ from abc import ABC, abstractmethod
 
 SERVICE_NAME = "easydbms"
 PASSWORD = "password"
+#: The other secrets a connection may have: SSH logins, key passphrases, the TLS client key.
+SSH_PASSWORD = "ssh.password"
+SSH_PASSPHRASE = "ssh.passphrase"
+JUMP_PASSWORD = "jump.password"
+JUMP_PASSPHRASE = "jump.passphrase"
+SSL_KEY_PASSWORD = "ssl.key_password"
+ALL_FIELDS = (
+    PASSWORD,
+    SSH_PASSWORD,
+    SSH_PASSPHRASE,
+    JUMP_PASSWORD,
+    JUMP_PASSPHRASE,
+    SSL_KEY_PASSWORD,
+)
 
 
 class SecretStoreError(Exception):
@@ -42,7 +56,9 @@ class SecretStore(ABC):
         """Remove a secret; removing one that does not exist is not an error."""
 
     def delete_all(self, connection_id: str) -> None:
-        self.delete(connection_id, PASSWORD)
+        """Remove every secret of a connection (the password, SSH and key passphrases ...)."""
+        for field in ALL_FIELDS:
+            self.delete(connection_id, field)
 
 
 def secret_key(connection_id: str, field: str) -> str:

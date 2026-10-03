@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 
-from .models import FileConnection, ServerConnection, replace
+from .models import FileConnection, ServerConnection, SshConfig, SshHop, replace
 
 _PATTERN = re.compile(r"\$\$\{|\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
 
@@ -49,6 +49,23 @@ def expand(value: str, environ: Mapping[str, str], missing: list[str] | None = N
     return result
 
 
+def _expand_ssh(
+    ssh: SshConfig | None, environ: Mapping[str, str], missing: list[str]
+) -> dict[str, object] | None:
+    if ssh is None:
+        return None
+
+    def hop(value: SshHop) -> dict[str, object]:
+        return {
+            **value.model_dump(),
+            "host": expand(value.host, environ, missing),
+            "user": expand(value.user, environ, missing),
+            "key_file": expand(value.key_file, environ, missing),
+        }
+
+    return {"server": hop(ssh.server), "jump": hop(ssh.jump) if ssh.jump else None}
+
+
 def resolve_config(
     config: ServerConnection | FileConnection,
     password: str | None,
@@ -61,7 +78,15 @@ def resolve_config(
             "host": expand(config.host, environ, missing),
             "user": expand(config.user, environ, missing),
             "database": expand(config.database, environ, missing),
+            "service": expand(config.service, environ, missing),
             "options": {k: expand(v, environ, missing) for k, v in config.options.items()},
+            "ssl": {
+                **config.ssl.model_dump(),
+                "ca_file": expand(config.ssl.ca_file, environ, missing),
+                "cert_file": expand(config.ssl.cert_file, environ, missing),
+                "key_file": expand(config.ssl.key_file, environ, missing),
+            },
+            "ssh": _expand_ssh(config.ssh, environ, missing),
         }
     else:
         changes = {"path": expand(config.path, environ, missing)}

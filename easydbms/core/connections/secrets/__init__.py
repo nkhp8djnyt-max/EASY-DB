@@ -3,7 +3,13 @@
 from pathlib import Path
 
 from .base import (
+    ALL_FIELDS,
+    JUMP_PASSPHRASE,
+    JUMP_PASSWORD,
     PASSWORD,
+    SSH_PASSPHRASE,
+    SSH_PASSWORD,
+    SSL_KEY_PASSWORD,
     SecretStore,
     SecretStoreError,
     VaultLockedError,
@@ -22,7 +28,13 @@ def choose_secret_store(vault_path: Path) -> SecretStore:
 
 
 __all__ = [
+    "ALL_FIELDS",
+    "JUMP_PASSPHRASE",
+    "JUMP_PASSWORD",
     "PASSWORD",
+    "SSH_PASSPHRASE",
+    "SSH_PASSWORD",
+    "SSL_KEY_PASSWORD",
     "KeyringSecretStore",
     "MemorySecretStore",
     "SecretStore",

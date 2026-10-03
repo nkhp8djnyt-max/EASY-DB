@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from easydbms.core.db import ConnectionFailed, DatabaseFileError
+from easydbms.core.db import ConnectionFailed, ConnectRuntime, DatabaseFileError
 from easydbms.core.session import Session, SessionState
 
 from .conftest import Events, ScriptedClient, file_config, server_config, sqlite_file, state_of
@@ -95,8 +95,8 @@ def test_password_and_resolved_config_reach_the_client() -> None:
 
 
 def test_a_client_that_fails_to_connect_is_left_disconnected() -> None:
-    def factory(config: object, password: str | None) -> ScriptedClient:
-        client = ScriptedClient(config, password)  # type: ignore[arg-type]
+    def factory(config: object, password: str | None, runtime: ConnectRuntime) -> ScriptedClient:
+        client = ScriptedClient(config, password, runtime)  # type: ignore[arg-type]
         client.fail_with = ConnectionFailed("nope")
         return client
 
@@ -108,7 +108,7 @@ def test_a_client_that_fails_to_connect_is_left_disconnected() -> None:
 
 
 def test_unexpected_exceptions_leave_a_clean_error_state_and_propagate() -> None:
-    def factory(config: object, password: str | None) -> ScriptedClient:
+    def factory(config: object, password: str | None, runtime: ConnectRuntime) -> ScriptedClient:
         raise RuntimeError("boom")
 
     events = Events()
@@ -122,8 +122,8 @@ def test_unexpected_exceptions_leave_a_clean_error_state_and_propagate() -> None
 def test_disconnect_while_connecting_discards_the_late_result() -> None:
     gates: list[ScriptedClient] = []
 
-    def factory(config: object, password: str | None) -> ScriptedClient:
-        client = ScriptedClient(config, password)  # type: ignore[arg-type]
+    def factory(config: object, password: str | None, runtime: ConnectRuntime) -> ScriptedClient:
+        client = ScriptedClient(config, password, runtime)  # type: ignore[arg-type]
         client.gate.clear()
         gates.append(client)
         return client

@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from urllib.parse import SplitResult, parse_qsl, quote, unquote, urlsplit
 
 from ..dialects import Dialect, UnknownDialectError, dialect_from_url
-from .models import FileConnection, ServerConnection
+from .models import FileConnection, ServerConnection, ssl_to_options
 
 MEMORY_DATABASE = ":memory:"
 
@@ -115,7 +115,8 @@ def build_connection_url(config: ServerConnection | FileConnection) -> str:
     port = f":{config.port}" if config.port is not None else ""
     user = f"{quote(config.user, safe='')}@" if config.user else ""
     database = f"/{quote(config.database, safe='')}" if config.database else ""
-    query = "&".join(f"{quote(k, safe='')}={quote(v, safe='')}" for k, v in config.options.items())
+    params = {**ssl_to_options(config.dialect, config.ssl), **config.options}
+    query = "&".join(f"{quote(k, safe='')}={quote(v, safe='')}" for k, v in params.items())
     return f"{scheme}://{user}{host}{port}{database}{'?' + query if query else ''}"
 
 

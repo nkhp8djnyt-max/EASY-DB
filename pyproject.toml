@@ -20,6 +20,7 @@ dependencies = [
     "numpy>=2.0",
     "pyarrow>=17",
     "rapidfuzz>=3",
+    "paramiko>=3.4",
 ]
 
 [project.optional-dependencies]
@@ -79,5 +80,5 @@ module = "tests.core.connections.test_secrets"
 disallow_untyped_calls = false
 
 [[tool.mypy.overrides]]
-module = ["pyarrow", "pyarrow.*"]
+module = ["pyarrow", "pyarrow.*", "paramiko", "paramiko.*"]
 ignore_missing_imports = true

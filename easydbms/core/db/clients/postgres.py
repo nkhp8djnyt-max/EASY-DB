@@ -8,7 +8,7 @@ from typing import Any
 import psycopg
 from psycopg import errors as pg_errors
 
-from ...connections import ServerConnection
+from ...connections import ServerConnection, SslMode
 from ...dialects import leading_keyword
 from ..base import DatabaseClient, RawResult
 from ..diagnostics import DEFAULT_TIMEOUT, network_steps
@@ -27,6 +27,8 @@ from ..errors import (
     ReadOnlyViolation,
     SslError,
 )
+from ..runtime import ConnectRuntime
+from ..tls import check_files, file_steps, postgres_params
 
 #: Statements that return rows; only these are streamed when a row limit is set.
 _ROW_KEYWORDS = frozenset({"SELECT", "WITH", "VALUES", "TABLE", "SHOW", "EXPLAIN", "("})
@@ -36,8 +38,13 @@ _READ_ONLY_STATE = "25006"
 
 
 class PostgresClient(DatabaseClient):
-    def __init__(self, config: ServerConnection, password: str | None = None) -> None:
-        super().__init__(config, password)
+    def __init__(
+        self,
+        config: ServerConnection,
+        password: str | None = None,
+        runtime: ConnectRuntime | None = None,
+    ) -> None:
+        super().__init__(config, password, runtime)
         self._server_config = config
 
     def _connect_kwargs(self) -> dict[str, Any]:
@@ -54,11 +61,34 @@ class PostgresClient(DatabaseClient):
             kwargs["dbname"] = config.database
         if self._password:
             kwargs["password"] = self._password
-        kwargs.update(config.options)  # libpq keywords: sslmode, options, ...
+        kwargs.update(config.options)  # libpq keywords: options, application_name, ...
+        kwargs.update(postgres_params(config.ssl, self._runtime.ssl_key_password))
+        route = self._runtime.route
+        if route is not None:  # an SSH tunnel: the name stays (certificate check), the socket moves
+            kwargs["hostaddr"] = route.host
+            kwargs["port"] = route.port
         return kwargs
 
     def _open(self) -> Any:
+        if self._server_config.ssl.mode is not SslMode.DISABLE:
+            check_files(self._server_config.ssl, self._runtime.ssl_key_password)
         return psycopg.connect(autocommit=True, **self._connect_kwargs())
+
+    def _tls_file_steps(self) -> list[tuple[str, Callable[[], str]]]:
+        return file_steps(self._server_config.ssl, self._runtime.ssl_key_password)
+
+    def _tls_summary(self, raw: Any) -> str | None:
+        if not raw.pgconn.ssl_in_use:
+            return "not encrypted"
+        try:
+            _, rows, _, _ = self._run(
+                raw, "SELECT version, cipher FROM pg_stat_ssl WHERE pid = pg_backend_pid()", 1
+            )
+        except Exception:  # an old server, or a view this user may not read
+            return "encrypted"
+        if rows and rows[0][0]:
+            return f"{rows[0][0]} · {rows[0][1]}"
+        return "encrypted"
 
     def _close(self, raw: Any) -> None:
         raw.close()
@@ -70,6 +100,8 @@ class PostgresClient(DatabaseClient):
         raw.cancel()
 
     def _network_steps(self) -> list[tuple[str, Callable[[], str]]]:
+        if self._runtime.route is not None:
+            return []  # the SSH steps already proved the way to the server
         timeout = float(self._server_config.options.get("connect_timeout", DEFAULT_TIMEOUT))
         return network_steps(self._server_config.host, self._server_config.effective_port, timeout)
 

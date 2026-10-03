@@ -10,6 +10,7 @@ from .errors import (
     DatabaseNotFound,
     DbError,
     DnsError,
+    InvalidConnection,
     InvalidOptionError,
     NotConnectedError,
     PortClosed,
@@ -17,8 +18,10 @@ from .errors import (
     QueryError,
     ReadOnlyViolation,
     SslError,
+    SslFileError,
 )
 from .factory import create_client
+from .runtime import ConnectRuntime, Route
 from .types import ApplyResult, BoundStatement, CheckStep, ConnectionCheck, QueryResult
 
 __all__ = [
@@ -26,6 +29,7 @@ __all__ = [
     "AuthFailed",
     "BoundStatement",
     "CheckStep",
+    "ConnectRuntime",
     "ConnectTimeout",
     "ConnectionCheck",
     "ConnectionFailed",
@@ -35,6 +39,7 @@ __all__ = [
     "DatabaseNotFound",
     "DbError",
     "DnsError",
+    "InvalidConnection",
     "InvalidOptionError",
     "NotConnectedError",
     "PortClosed",
@@ -42,6 +47,8 @@ __all__ = [
     "QueryError",
     "QueryResult",
     "ReadOnlyViolation",
+    "Route",
     "SslError",
+    "SslFileError",
     "create_client",
 ]

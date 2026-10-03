@@ -6,6 +6,7 @@ connection config and back, which keeps it easy to test.
 
 from __future__ import annotations
 
+import os
 from urllib.parse import parse_qsl, quote
 
 from pydantic import ValidationError
@@ -15,12 +16,14 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFileDialog,
+    QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
     QRadioButton,
+    QScrollArea,
     QSpinBox,
     QStackedWidget,
     QTabWidget,
@@ -29,15 +32,20 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.connections import (
+    SSL_KEY_PASSWORD,
     ConnectionColor,
     ConnectionUrlError,
     FileConnection,
     ServerConnection,
+    SslConfig,
     build_connection_url,
+    load_pgpass,
+    load_services,
     parse_config,
     parse_connection_url,
 )
 from ..core.dialects import MYSQL, POSTGRESQL, SQLITE, Dialect, DialectId
+from .connection_security import SshEditor, SslEditor
 from .i18n import tr
 from .icons import dot_icon
 from .theme import COLOR_HEX
@@ -133,6 +141,10 @@ class ConnectionForm(QWidget):
         self.tabs = QTabWidget()
         self.tabs.addTab(self._build_url_tab(), tr("URL"))
         self.tabs.addTab(self._build_details_tab(), tr("Host / Port"))
+        self.ssl_editor = SslEditor()
+        self.ssh_editor = SshEditor()
+        self.tabs.addTab(self._scrolled(self.ssl_editor), tr("SSL / TLS"))
+        self.tabs.addTab(self._scrolled(self.ssh_editor), tr("SSH tunnel"))
         layout.addWidget(self.tabs)
 
         self.password_widget = QWidget()
@@ -145,6 +157,9 @@ class ConnectionForm(QWidget):
         self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.save_password_check = QCheckBox(
             tr("Save the password in the {store}", store=secret_store_name or tr("password store"))
+        )
+        self.save_password_check.setToolTip(
+            tr("SSH passwords and key passphrases are kept the same way.")
         )
         password_layout.addWidget(password_label)
         password_layout.addWidget(self.password_edit)
@@ -205,7 +220,16 @@ class ConnectionForm(QWidget):
         self.user_edit = QLineEdit()
         self.database_edit = QLineEdit()
         self.params_edit = QLineEdit()
-        self.params_edit.setPlaceholderText("sslmode=require&connect_timeout=5")
+        self.params_edit.setPlaceholderText("connect_timeout=5&application_name=easydbms")
+        self.service_combo = QComboBox()
+        self.service_combo.setEditable(True)
+        self.service_combo.lineEdit().setPlaceholderText(  # type: ignore[union-attr]
+            tr("optional — a service from pg_service.conf")
+        )
+        self.service_label = QLabel(tr("Service"))
+        self.pgpass_hint = QLabel()
+        self.pgpass_hint.setProperty("muted", True)
+        self.pgpass_hint.setWordWrap(True)
         cells = [
             (0, 0, tr("Host"), self.host_edit, 1),
             (0, 1, tr("Port"), self.port_spin, 1),
@@ -218,8 +242,12 @@ class ConnectionForm(QWidget):
             label.setProperty("muted", True)
             grid.addWidget(label, row, column, 1, span)
             grid.addWidget(widget, row + 1, column, 1, span)
+        self.service_label.setProperty("muted", True)
+        grid.addWidget(self.service_label, 8, 0, 1, 2)
+        grid.addWidget(self.service_combo, 9, 0, 1, 2)
+        grid.addWidget(self.pgpass_hint, 10, 0, 1, 2)
         grid.setColumnStretch(0, 1)
-        grid.setRowStretch(8, 1)
+        grid.setRowStretch(11, 1)
         self.stack.addWidget(server)
 
         file_page = QWidget()
@@ -244,6 +272,22 @@ class ConnectionForm(QWidget):
         self.stack.addWidget(file_page)
         return page
 
+    @staticmethod
+    def _scrolled(content: QWidget) -> QWidget:
+        page = QWidget()
+        page.setProperty("panel", True)
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(14, 14, 14, 14)
+        area = QScrollArea()
+        area.setWidgetResizable(True)
+        area.setFrameShape(QFrame.Shape.NoFrame)
+        area.setStyleSheet(
+            "QScrollArea, QScrollArea > QWidget > QWidget { background: transparent; }"
+        )
+        area.setWidget(content)
+        layout.addWidget(area)
+        return page
+
     def _wire(self) -> None:
         for button in self.dialect_buttons.values():
             button.toggled.connect(self._on_dialect_toggled)
@@ -259,6 +303,9 @@ class ConnectionForm(QWidget):
             edit.textEdited.connect(self._on_field_edited)
         self.port_spin.valueChanged.connect(self._on_field_edited)
         self.create_check.toggled.connect(self._on_field_edited)
+        self.service_combo.editTextChanged.connect(self._on_field_edited)
+        self.ssl_editor.edited.connect(self._on_field_edited)
+        self.ssh_editor.edited.connect(self._emit_changed)
         self.name_edit.textEdited.connect(self._emit_changed)
         self.group_combo.editTextChanged.connect(self._emit_changed)
         self.color_combo.currentIndexChanged.connect(self._emit_changed)
@@ -285,6 +332,23 @@ class ConnectionForm(QWidget):
     def save_password(self) -> bool:
         return self.save_password_check.isChecked()
 
+    @property
+    def secrets(self) -> dict[str, str]:
+        """The SSH passwords / passphrases and TLS key passphrase typed into the form."""
+        if self.dialect_id is DialectId.SQLITE:
+            return {}
+        return {**self.ssh_editor.secrets, **self.ssl_editor.secrets}
+
+    @property
+    def applicable_secret_fields(self) -> list[str]:
+        """The secret fields (besides the password) this configuration can use."""
+        if self.dialect_id is DialectId.SQLITE:
+            return []
+        fields = self.ssh_editor.applicable_fields
+        if self.ssl_editor.key_file.text():
+            fields.append(SSL_KEY_PASSWORD)
+        return fields
+
     def set_groups(self, groups: list[str]) -> None:
         current = self.group_combo.currentText()
         self.group_combo.blockSignals(True)
@@ -298,6 +362,7 @@ class ConnectionForm(QWidget):
         config: ServerConnection | FileConnection | None,
         *,
         has_saved_password: bool = False,
+        saved_secrets: set[str] | frozenset[str] = frozenset(),
     ) -> None:
         """Fill the form from ``config`` (``None`` = a blank new connection)."""
         self._syncing = True
@@ -323,6 +388,9 @@ class ConnectionForm(QWidget):
                 self.params_edit.clear()
                 self.port_spin.setValue(0)
                 self.save_password_check.setChecked(False)
+                self.service_combo.setEditText("")
+                self.ssl_editor.load(SslConfig())
+                self.ssh_editor.load(None)
             else:
                 dialect_id = config.dialect if config else DialectId.POSTGRESQL
                 self._select_dialect(DialectId(dialect_id))
@@ -334,11 +402,19 @@ class ConnectionForm(QWidget):
                 self.path_edit.clear()
                 self.create_check.setChecked(False)
                 self.save_password_check.setChecked(config.save_password if config else True)
+                self._fill_services()
+                self.service_combo.setEditText(config.service if config else "")
+                self.ssl_editor.load(
+                    config.ssl if config else SslConfig(),
+                    saved_key_password=SSL_KEY_PASSWORD in saved_secrets,
+                )
+                self.ssh_editor.load(config.ssh if config else None, saved=saved_secrets)
             self._apply_dialect_ui()
             self.password_edit.setPlaceholderText(
                 tr("A saved password is used. Type to replace it.") if has_saved_password else ""
             )
             self._refresh_url()
+            self._refresh_pgpass_hint()
         finally:
             self._syncing = False
 
@@ -351,8 +427,15 @@ class ConnectionForm(QWidget):
         if data["kind"] == "file":
             if not str(data["path"]).strip():
                 raise FormError(tr("Choose the database file."))
-        elif not str(data["host"]).strip():
-            raise FormError(tr("Enter the host name."))
+        elif not str(data["host"]).strip() and not str(data["service"]).strip():
+            raise FormError(tr("Enter the host name (or a service)."))
+        elif isinstance(data.get("ssh"), dict):
+            ssh = data["ssh"]
+            assert isinstance(ssh, dict)
+            if not str(ssh["server"]["host"]).strip():
+                raise FormError(tr("Enter the SSH server host name."))
+            if isinstance(ssh["jump"], dict) and not str(ssh["jump"]["host"]).strip():
+                raise FormError(tr("Enter the jump host name."))
         try:
             return parse_config(data)
         except ValidationError as error:
@@ -389,6 +472,11 @@ class ConnectionForm(QWidget):
             "database": self.database_edit.text().strip(),
             "options": dict(parse_qsl(self.params_edit.text().strip(), keep_blank_values=True)),
             "save_password": self.save_password_check.isChecked(),
+            "service": self.service_combo.currentText().strip()
+            if self.dialect_id is DialectId.POSTGRESQL
+            else "",
+            "ssl": self.ssl_editor.read(),
+            "ssh": self.ssh_editor.read(),
         }
 
     def _draft(self) -> ServerConnection | FileConnection | None:
@@ -409,6 +497,12 @@ class ConnectionForm(QWidget):
         self.stack.setCurrentIndex(1 if is_file else 0)
         self.tabs.setTabText(1, tr("File") if is_file else tr("Host / Port"))
         self.password_widget.setVisible(not is_file)
+        is_postgres = self.dialect_id is DialectId.POSTGRESQL
+        for widget in (self.service_label, self.service_combo, self.pgpass_hint):
+            widget.setVisible(is_postgres)
+        self.tabs.setTabVisible(2, not is_file)
+        self.tabs.setTabVisible(3, not is_file)
+        self.ssl_editor.set_dialect(self.dialect_id)
         if not is_file and dialect.default_port is not None:
             self.port_spin.setSpecialValueText(tr("default ({port})", port=dialect.default_port))
         self.url_edit.setPlaceholderText(
@@ -437,8 +531,44 @@ class ConnectionForm(QWidget):
         if self._syncing:
             return
         self._refresh_url()
+        self._refresh_pgpass_hint()
         self.url_error.hide()
         self.changed.emit()
+
+    def _fill_services(self) -> None:
+        """Offer the services found in ``pg_service.conf`` (the box stays free text)."""
+        current = self.service_combo.currentText()
+        self.service_combo.blockSignals(True)
+        self.service_combo.clear()
+        self.service_combo.addItems(sorted(load_services(os.environ)))
+        self.service_combo.setEditText(current)
+        self.service_combo.blockSignals(False)
+
+    def _refresh_pgpass_hint(self) -> None:
+        """Say whether ``~/.pgpass`` already knows this connection's password."""
+        text = ""
+        if self.dialect_id is DialectId.POSTGRESQL:
+            pgpass = load_pgpass(os.environ)
+            if pgpass is not None:
+                host = self.host_edit.text().strip()
+                found = pgpass.lookup(
+                    host,
+                    self.port_spin.value() or None,
+                    self.database_edit.text().strip() or self.user_edit.text().strip(),
+                    self.user_edit.text().strip(),
+                )
+                if pgpass.problem:
+                    text = pgpass.problem
+                elif found is not None:
+                    text = tr(
+                        "{file} has a password for this connection (line {line}); "
+                        "it is used when none is saved.",
+                        file=str(found.path),
+                        line=found.line,
+                    )
+                elif host:
+                    text = tr("{file} has no line for this connection.", file=str(pgpass.path))
+        self.pgpass_hint.setText(text)
 
     def _on_url_typing(self, text: str) -> None:
         if self._apply_url(text, show_error=False):
@@ -480,6 +610,7 @@ class ConnectionForm(QWidget):
                 self.user_edit.setText(config.user)
                 self.database_edit.setText(config.database)
                 self.params_edit.setText(_encode_options(config.options))
+                self.ssl_editor.load(config.ssl)
                 if parsed.password is not None:
                     self.password_edit.setText(parsed.password)
             if not self.name_edit.text().strip():

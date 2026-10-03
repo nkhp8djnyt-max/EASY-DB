@@ -31,6 +31,11 @@ class AppPaths:
         return self.config_dir / "vault.json"
 
     @property
+    def known_hosts_file(self) -> Path:
+        """SSH servers the user chose to trust (OpenSSH ``known_hosts`` format)."""
+        return self.config_dir / "known_hosts"
+
+    @property
     def app_db(self) -> Path:
         return self.data_dir / "app.db"
 

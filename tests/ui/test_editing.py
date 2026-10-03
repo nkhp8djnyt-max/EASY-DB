@@ -470,7 +470,7 @@ def test_alt_s_shows_the_sql_and_applying_writes_it(
     assert db_rows(env, config, "SELECT title FROM book WHERE id = 1") == [("Edited title",)]
     assert "Applied 1 changes" in tab.editor.bar.status.text()
     assert not tab.editor.bar.apply_button.isVisibleTo(tab)
-    assert cell(tab, 0, "title") == "Edited title"  # the page was reloaded
+    qtbot.waitUntil(lambda: cell(tab, 0, "title") == "Edited title", timeout=10000)  # reloaded
 
 
 def test_cancelling_the_review_writes_nothing(env: Env, qtbot: QtBot, prompts: Prompts) -> None:

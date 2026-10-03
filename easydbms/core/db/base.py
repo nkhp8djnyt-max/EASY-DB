@@ -25,6 +25,7 @@ from .errors import (
     NotConnectedError,
     QueryError,
 )
+from .runtime import ConnectRuntime
 from .types import ApplyResult, BoundStatement, CheckStep, ConnectionCheck, QueryResult
 
 #: Seconds ``disconnect`` waits for a running statement to stop after cancelling it.
@@ -36,10 +37,14 @@ RawResult = tuple[tuple[str, ...], list[tuple[Any, ...]], int | None, bool]
 
 class DatabaseClient(ABC):
     def __init__(
-        self, config: ServerConnection | FileConnection, password: str | None = None
+        self,
+        config: ServerConnection | FileConnection,
+        password: str | None = None,
+        runtime: ConnectRuntime | None = None,
     ) -> None:
         self._config = config
         self._password = password
+        self._runtime = runtime or ConnectRuntime()
         self._raw: Any | None = None
         self._server_info: ServerInfo | None = None
         self._state_lock = threading.RLock()
@@ -238,7 +243,7 @@ class DatabaseClient(ABC):
             steps.append(CheckStep(name, True, detail, time.perf_counter() - started))
             return True
 
-        for name, action in self._network_steps():
+        for name, action in [*self._network_steps(), *self._tls_file_steps()]:
             if not run_step(name, action):
                 return ConnectionCheck(tuple(steps), None, failure)
 
@@ -252,6 +257,9 @@ class DatabaseClient(ABC):
         try:
             if run_step(self._login_step_name, login):
                 version = steps[-1].detail
+                encryption = self._tls_summary(opened[0])
+                if encryption is not None:
+                    steps.append(CheckStep("TLS", True, encryption, 0.0))
 
                 def probe() -> str:
                     self._run(opened[0], "SELECT 1", 1)
@@ -317,6 +325,14 @@ class DatabaseClient(ABC):
     def _network_steps(self) -> list[tuple[str, Callable[[], str]]]:
         """Checks to run before logging in (DNS, TCP); each raises :class:`ConnectionFailed`."""
         return []
+
+    def _tls_file_steps(self) -> list[tuple[str, Callable[[], str]]]:
+        """Checks of the TLS certificate / key files (only when some are configured)."""
+        return []
+
+    def _tls_summary(self, raw: Any) -> str | None:
+        """How the open connection is encrypted ("TLSv1.3 · cipher"), ``None`` for no TLS info."""
+        return None
 
     # ------------------------------------------------------------------ helpers
 

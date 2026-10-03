@@ -780,7 +780,10 @@ def test_the_query_menu_has_apply_changes_on_alt_s(
     action.trigger()
     qtbot.waitUntil(lambda: tab.pending == 0, timeout=10000)
     assert len(prompts.previews) == 1
-    assert tab.grid.model().value(0, 2) == "From the menu"  # type: ignore[attr-defined]
+    qtbot.waitUntil(
+        lambda: tab.grid.model().value(0, 2) == "From the menu",  # type: ignore[attr-defined]
+        timeout=10000,
+    )  # the page is reloaded after the write
 
 
 def test_apply_changes_does_nothing_without_a_workspace(env: Env, qtbot: QtBot) -> None:

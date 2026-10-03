@@ -10,15 +10,15 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TypeVar
 
-from ..connections import MEMORY_DATABASE, FileConnection, ServerConnection, resolve_config
+from ..connections import MEMORY_DATABASE, FileConnection, ServerConnection
 from ..db import DatabaseClient, DbError, NotConnectedError, create_client
 from ..dialects import ServerInfo, Statement
 from ..queries import ScriptRun, StatementOutcome
 from ..schema import DatabaseSchema, introspect
+from ..ssh import KnownHosts, SshTunnel
+from .connector import ClientFactory, Prepared, prepare
 
 T = TypeVar("T")
-
-ClientFactory = Callable[[ServerConnection | FileConnection, str | None], DatabaseClient]
 
 
 class SessionState(StrEnum):
@@ -78,10 +78,12 @@ class Session:
         config: ServerConnection | FileConnection,
         on_event: Callable[[SessionEvent], None] | None = None,
         client_factory: ClientFactory = create_client,
+        known_hosts: KnownHosts | None = None,
     ) -> None:
         self._config = config
         self._on_event = on_event
         self._client_factory = client_factory
+        self._known_hosts = known_hosts
         self._lock = threading.RLock()
         self._state = SessionState.DISCONNECTED
         self._error: Exception | None = None
@@ -89,7 +91,7 @@ class Session:
         #: Bumped by ``disconnect`` so a connect that finishes afterwards knows it was abandoned.
         self._epoch = 0
         self._lane: ThreadPoolExecutor | None = None
-        self._resolved: tuple[ServerConnection | FileConnection, str | None] | None = None
+        self._prepared: Prepared | None = None
         self._meta_lane: ThreadPoolExecutor | None = None
         self._meta_client: DatabaseClient | None = None
         self._schema: DatabaseSchema | None = None
@@ -141,11 +143,22 @@ class Session:
         """Bumped by every successful introspection, so caches can tell whether they are stale."""
         return self._schema_version
 
-    def connect(
-        self, password: str | None = None, environ: Mapping[str, str] | None = None
-    ) -> None:
-        """Resolve ``${ENV}`` placeholders, open the client and move to ``READY`` or ``ERROR``.
+    @property
+    def tunnel(self) -> SshTunnel | None:
+        """The SSH tunnel this session runs through (while connected), if it has one."""
+        prepared = self._prepared
+        return prepared.tunnel if prepared is not None else None
 
+    def connect(
+        self,
+        password: str | None = None,
+        environ: Mapping[str, str] | None = None,
+        secrets: Mapping[str, str] | None = None,
+    ) -> None:
+        """Prepare the connection, open the client and move to ``READY`` or ``ERROR``.
+
+        Preparing resolves ``${ENV}`` placeholders, applies ``pg_service.conf`` / ``~/.pgpass`` and
+        opens the SSH tunnel (``secrets``: its passwords and key passphrases by field name).
         Failures are recorded (``error``, ``ERROR`` state, event) rather than raised.
         """
         with self._lock:
@@ -154,24 +167,26 @@ class Session:
             epoch = self._epoch
             self._set(SessionState.CONNECTING)
         client: DatabaseClient | None = None
+        prepared: Prepared | None = None
         try:
-            resolved, resolved_password = resolve_config(
-                self._config, password, os.environ if environ is None else environ
+            prepared = prepare(
+                self._config,
+                password,
+                secrets or {},
+                os.environ if environ is None else environ,
+                self._known_hosts,
             )
-            client = self._client_factory(resolved, resolved_password)
+            client = self._client_factory(prepared.config, prepared.password, prepared.runtime)
             client.connect()
-            self._resolved = (resolved, resolved_password)
-        except (DbError, ValueError) as error:  # ValueError: undefined ${VAR}, invalid expansion
-            if client is not None:
-                client.disconnect()
+        except (DbError, ValueError) as error:  # ValueError: undefined ${VAR}, unknown service
+            self._discard(client, prepared)
             self._finish(epoch, SessionState.ERROR, error=error)
         except BaseException as error:
-            if client is not None:
-                client.disconnect()
+            self._discard(client, prepared)
             self._finish(epoch, SessionState.ERROR, error=RuntimeError(f"unexpected: {error!r}"))
             raise
         else:
-            self._finish(epoch, SessionState.READY, client=client)
+            self._finish(epoch, SessionState.READY, client=client, prepared=prepared)
 
     def fail(self, error: Exception) -> None:
         """Record a failure that happened before connecting (e.g. the password is unreadable)."""
@@ -213,7 +228,7 @@ class Session:
     def run_on_meta(self, job: Callable[[DatabaseClient], T]) -> Future[T]:
         """Run ``job(client)`` on the meta lane (one at a time, on the second connection)."""
         with self._lock:
-            if self.client is None or self._resolved is None:
+            if self.client is None or self._prepared is None:
                 raise NotConnectedError("not connected")
             if self._meta_lane is None:
                 self._meta_lane = ThreadPoolExecutor(max_workers=1, thread_name_prefix="meta")
@@ -229,16 +244,18 @@ class Session:
     def _meta(self, epoch: int) -> DatabaseClient:
         """The meta lane's connection, opened on first use (runs on the meta worker thread)."""
         with self._lock:
-            if epoch != self._epoch or self._resolved is None:
+            prepared = self._prepared
+            if epoch != self._epoch or prepared is None:
                 raise NotConnectedError("the session was disconnected")
             if self._meta_client is not None:
                 return self._meta_client
-            config, password = self._resolved
             main = self._client
+        config = prepared.config
         if isinstance(config, FileConnection) and config.path == MEMORY_DATABASE:
             assert main is not None  # a second connection would be a different, empty database
             return main
-        client = self._client_factory(config, password)
+        # the second connection goes through the same tunnel, so it needs no second login
+        client = self._client_factory(config, prepared.password, prepared.runtime)
         client.connect()
         with self._lock:
             if epoch != self._epoch:
@@ -278,7 +295,7 @@ class Session:
             self._schema = None
             self._schema_state = SchemaState.NONE
             self._schema_error = None
-            self._resolved = None
+            prepared, self._prepared = self._prepared, None
             client, self._client = self._client, None
             was_idle = self._state is SessionState.DISCONNECTED
             self._error = None
@@ -290,6 +307,8 @@ class Session:
             meta_client.disconnect()
         if client is not None:
             client.disconnect()
+        if prepared is not None:
+            prepared.close()  # the tunnel goes last: the connections above run through it
         if not was_idle:
             self._emit(SessionState.DISCONNECTED)
 
@@ -306,6 +325,7 @@ class Session:
         state: SessionState,
         *,
         client: DatabaseClient | None = None,
+        prepared: Prepared | None = None,
         error: Exception | None = None,
     ) -> None:
         with self._lock:
@@ -314,13 +334,20 @@ class Session:
             else:
                 abandoned = False
                 self._client = client
+                self._prepared = prepared
                 self._error = error
                 self._state = state
         if abandoned:
-            if client is not None:
-                client.disconnect()
+            self._discard(client, prepared)
             return
         self._emit(state, error=error, server_info=client.server_info if client else None)
+
+    @staticmethod
+    def _discard(client: DatabaseClient | None, prepared: Prepared | None) -> None:
+        if client is not None:
+            client.disconnect()
+        if prepared is not None:
+            prepared.close()
 
     def _emit_schema(
         self,
