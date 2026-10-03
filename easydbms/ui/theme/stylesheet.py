@@ -23,6 +23,10 @@ QFrame[panel="true"], QWidget[panel="true"] {{ background-color: {t.panel}; }}
 QFrame[card="true"] {{ background-color: {t.panel}; border: 1px solid {t.border}; border-radius: 8px; }}
 QFrame[card="true"] QLabel {{ background: transparent; }}
 
+QFrame#completionPopup {{ background-color: {t.panel}; border: 1px solid {t.border}; border-radius: 6px; }}
+QFrame#completionPopup QListView {{ background-color: {t.panel}; border: none; outline: 0; }}
+QLabel#completionDoc {{ background-color: {t.panel_alt}; color: {t.text}; border-left: 1px solid {t.border}; }}
+
 QLineEdit, QPlainTextEdit, QTextEdit, QComboBox, QSpinBox {{
     background-color: {t.input_bg}; color: {t.text};
     border: 1px solid {t.border}; border-radius: 6px; padding: 5px 8px;

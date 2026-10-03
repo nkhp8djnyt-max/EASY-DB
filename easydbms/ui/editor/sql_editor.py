@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QRect, QSize, Qt
+from PySide6.QtCore import QEvent, QRect, QSize, Qt
 from PySide6.QtGui import (
     QColor,
+    QFocusEvent,
     QFontDatabase,
+    QHideEvent,
     QKeyEvent,
     QPainter,
     QPaintEvent,
@@ -17,6 +19,7 @@ from PySide6.QtWidgets import QPlainTextEdit, QTextEdit, QWidget
 
 from ...core.dialects import Dialect, Statement, TokenKind, split_statements, statement_at, tokenize
 from ..theme import current_syntax, current_tokens
+from .completion import CompletionController, CompletionSource
 from .highlighter import SqlHighlighter
 
 _BRACKET_SCAN_LIMIT = 50_000
@@ -45,6 +48,7 @@ class SqlEditor(QPlainTextEdit):
         self.setTabStopDistance(self.fontMetrics().horizontalAdvance(" ") * len(_INDENT))
         self._numbers = _LineNumbers(self)
         self._highlighter = SqlHighlighter(self.document(), dialect)
+        self.completion = CompletionController(self)
         self.blockCountChanged.connect(self._update_number_width)
         self.updateRequest.connect(self._scroll_numbers)
         self.cursorPositionChanged.connect(self._update_selections)
@@ -60,12 +64,23 @@ class SqlEditor(QPlainTextEdit):
     def set_dialect(self, dialect: Dialect) -> None:
         self._dialect = dialect
         self._highlighter.set_dialect(dialect)
+        self.completion.hide()
 
     def refresh_theme(self) -> None:
         self._highlighter.set_colors(current_syntax())
         self._highlighter.rehighlight()
         self._update_selections()
         self._numbers.update()
+
+    # ------------------------------------------------------------------ autocomplete
+
+    def set_completion(self, source: CompletionSource | None) -> None:
+        """Turn autocomplete on with ``source`` (``None`` turns it off)."""
+        self.completion.set_source(source)
+
+    def complete(self) -> None:
+        """Open the suggestions now, even where they would not appear by themselves."""
+        self.completion.trigger(forced=True)
 
     # ------------------------------------------------------------------ statements
 
@@ -196,7 +211,31 @@ class SqlEditor(QPlainTextEdit):
 
     # ------------------------------------------------------------------ editing
 
+    def event(self, event: QEvent) -> bool:
+        if (
+            event.type() == QEvent.Type.ShortcutOverride
+            and isinstance(event, QKeyEvent)
+            and self.completion.wants_key(event.key())
+        ):
+            event.accept()  # Esc closes the list instead of stopping the query
+            return True
+        return super().event(event)
+
+    def focusOutEvent(self, event: QFocusEvent) -> None:
+        self.completion.focus_lost()
+        super().focusOutEvent(event)
+
+    def hideEvent(self, event: QHideEvent) -> None:
+        self.completion.hide()
+        super().hideEvent(event)
+
     def keyPressEvent(self, event: QKeyEvent) -> None:
+        if self.completion.handle_key(event):
+            return
+        self._edit_key(event)
+        self.completion.after_key(event)
+
+    def _edit_key(self, event: QKeyEvent) -> None:
         ctrl = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
         if ctrl and event.key() == Qt.Key.Key_Slash:
             self.toggle_comment()

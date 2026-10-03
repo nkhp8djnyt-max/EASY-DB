@@ -58,6 +58,18 @@ MIGRATIONS: tuple[Migration, ...] = (
             " PRIMARY KEY (connection_id, scope, schema, name))",
         ),
     ),
+    Migration(
+        4,
+        "how often each autocomplete suggestion was accepted, per connection",
+        (
+            "CREATE TABLE completion_usage ("
+            " connection_id TEXT NOT NULL,"
+            " key TEXT NOT NULL,"
+            " uses INTEGER NOT NULL,"
+            " last_used REAL NOT NULL,"
+            " PRIMARY KEY (connection_id, key))",
+        ),
+    ),
 )
 
 

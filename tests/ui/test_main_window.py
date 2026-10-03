@@ -17,7 +17,7 @@ from easydbms.ui.main_window import MainWindow
 from easydbms.ui.runtime import BackgroundRunner, EventBridge
 from easydbms.ui.theme import current_tokens
 
-from .conftest import Env, Prompts, shown_texts
+from .conftest import Env, Prompts, add_shop, shown_texts
 
 
 def make_window(env: Env, qtbot: QtBot) -> MainWindow:
@@ -670,3 +670,79 @@ def test_changing_the_theme_recolours_the_diagram(env: Env, qtbot: QtBot) -> Non
     window.set_theme("light")
     assert pane.scene.cards()[0]._colors.card.name() != before
     window.set_theme("dark")
+
+
+# ---------------------------------------------------------------------------- autocomplete
+
+
+def test_the_keyword_case_menu_persists_the_choice(env: Env, qtbot: QtBot) -> None:
+    window = make_window(env, qtbot)
+    assert SettingsStore(env.services.paths.settings_file).load().keyword_case == "upper"
+    case_menu = next(
+        a.menu()
+        for a in menu_action_list(window, "&Query")
+        if a.menu() is not None and a.text() == "Keyword case"
+    )
+    assert case_menu is not None
+    actions = case_menu.actions()
+    assert [a.isChecked() for a in actions] == [True, False, False]
+    actions[1].trigger()
+    assert env.services.settings.keyword_case == "lower"
+    assert SettingsStore(env.services.paths.settings_file).load().keyword_case == "lower"
+    window.set_keyword_case("bogus")  # ignored
+    assert env.services.settings.keyword_case == "lower"
+
+
+def menu_action_list(window: MainWindow, menu: str) -> list[QAction]:
+    for action in window.menuBar().actions():
+        if action.text() == menu and action.menu() is not None:
+            return action.menu().actions()  # type: ignore[union-attr]
+    raise AssertionError(menu)
+
+
+def test_the_autocomplete_menu_item_opens_the_list(env: Env, qtbot: QtBot) -> None:
+    config = add_shop(env, "Shop")
+    window = make_window(env, qtbot)
+    action = menu_action(window, "&Query", "&Autocomplete")
+    assert action.shortcut().toString() == "Ctrl+Space"
+    window.activate(config.id)
+    qtbot.waitUntil(lambda: window.left.currentWidget() is window.workspaces, timeout=10000)
+    tab = window.current_workspace().current_tab()  # type: ignore[union-attr]
+    action.trigger()
+    qtbot.waitUntil(lambda: tab.editor.completion.visible, timeout=5000)  # type: ignore[union-attr]
+
+
+def test_the_keyword_case_setting_reaches_the_editors(env: Env, qtbot: QtBot) -> None:
+    config = add_shop(env, "Shop")
+    window = make_window(env, qtbot)
+    window.set_keyword_case("lower")
+    window.activate(config.id)
+    qtbot.waitUntil(lambda: window.left.currentWidget() is window.workspaces, timeout=10000)
+    tab = window.current_workspace().current_tab()  # type: ignore[union-attr]
+    tab.editor.completion.debounce_ms = 5  # type: ignore[union-attr]
+    from PySide6.QtTest import QTest
+
+    QTest.keyClicks(tab.editor, "SEL")  # type: ignore[union-attr]
+    qtbot.waitUntil(lambda: tab.editor.completion.visible, timeout=5000)  # type: ignore[union-attr]
+    model = tab.editor.completion.popup.model  # type: ignore[union-attr]
+    assert "select" in [model.item(r).label for r in range(model.rowCount())]  # type: ignore[union-attr]
+
+
+def test_deleting_a_connection_forgets_what_was_accepted(env: Env, qtbot: QtBot) -> None:
+    config = env.add_sqlite("Shop")
+    window = make_window(env, qtbot)
+    window.activate(config.id)
+    qtbot.waitUntil(lambda: config.id in window._workspaces, timeout=10000)
+    env.services.usage_store.record(config.id, "table:main.book")
+    env.services.store.remove(config.id)
+    window._refresh()
+    assert dict(env.services.usage_store.counts(config.id)) == {}
+
+
+def test_usage_of_connections_that_vanished_is_pruned_at_startup(env: Env, qtbot: QtBot) -> None:
+    kept = env.add_sqlite("Kept")
+    env.services.usage_store.record(kept.id, "a")
+    env.services.usage_store.record("gone", "a")
+    make_window(env, qtbot)
+    rows = env.services.db.execute("SELECT DISTINCT connection_id FROM completion_usage")
+    assert rows == [(kept.id,)]

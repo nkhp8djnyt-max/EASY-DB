@@ -67,6 +67,7 @@ class MainWindow(QMainWindow):
         self.statusBar().addWidget(self._status_label, 1)
         bridge.posted.connect(self._on_event)
         self._restore_state()
+        services.usage_store.prune({c.id for c in services.store.all()})
         self._refresh()
 
     # ------------------------------------------------------------------ construction
@@ -97,6 +98,22 @@ class MainWindow(QMainWindow):
             action.triggered.connect(lambda _checked=False, h=handler: self._with_workspace(h))
             query_menu.addAction(action)
         query_menu.addSeparator()
+        suggest = QAction(tr("&Autocomplete"), self)
+        suggest.setShortcut(QKeySequence("Ctrl+Space"))
+        suggest.triggered.connect(lambda: self._with_workspace(lambda w: w.complete()))
+        query_menu.addAction(suggest)
+        case_menu = query_menu.addMenu(tr("Keyword case"))
+        cases = QActionGroup(self)
+        for value, label in (
+            ("upper", tr("UPPER CASE (SELECT)")),
+            ("lower", tr("lower case (select)")),
+            ("preserve", tr("As typed")),
+        ):
+            action = QAction(label, self, checkable=True)
+            action.setChecked(self._services.settings.keyword_case == value)
+            action.triggered.connect(lambda _checked=False, v=value: self.set_keyword_case(v))
+            cases.addAction(action)
+            case_menu.addAction(action)
         limit_menu = query_menu.addMenu(tr("Row limit"))
         limits = QActionGroup(self)
         for count in (100, 1000, 10_000, 100_000):
@@ -401,6 +418,8 @@ class MainWindow(QMainWindow):
                 session.config,
                 self._services.tab_store,
                 lambda: self._services.settings.row_limit,
+                usage=self._services.usage_store,
+                keyword_case=lambda: self._services.settings.keyword_case,
             )
             self._workspaces[session.id] = workspace
             self.workspaces.addWidget(workspace)
@@ -430,10 +449,16 @@ class MainWindow(QMainWindow):
             workspace.deleteLater()
             self._services.tab_store.forget(connection_id)
             self._services.erd_store.forget(connection_id)
+            self._services.usage_store.forget(connection_id)
             pane = self._erd_panes.pop(connection_id, None)
             if pane is not None:
                 self.erd_stack.removeWidget(pane)
                 pane.deleteLater()
+
+    def set_keyword_case(self, value: str) -> None:
+        if value in ("upper", "lower", "preserve"):
+            self._services.settings.keyword_case = value  # type: ignore[assignment]
+            self._services.settings_store.save(self._services.settings)
 
     def set_row_limit(self, count: int) -> None:
         self._services.settings.row_limit = count

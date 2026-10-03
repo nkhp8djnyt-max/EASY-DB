@@ -7,6 +7,7 @@ the UI has no Russian entry, so the two languages cannot drift apart.
 
 from __future__ import annotations
 
+from ..core.autocomplete.messages import use_translator
 from .catalog_ru import RU
 
 _language = "en"
@@ -34,3 +35,10 @@ def tr(text: str, **values: object) -> str:
     """Translate ``text``; ``{name}`` placeholders are filled from ``values``."""
     translated = RU.get(text, text) if _language == "ru" else text
     return translated.format(**values) if values else translated
+
+
+def _template(text: str) -> str:
+    return RU.get(text, text) if _language == "ru" else text
+
+
+use_translator(_template)  # the sentences autocomplete writes itself follow the UI language

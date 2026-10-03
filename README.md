@@ -4,10 +4,19 @@ Desktop database client in Python: SQL editor, ERD, editable result grid. Suppor
 dialects: **PostgreSQL**, **MySQL** (including MariaDB) and **SQLite**. Corporate dialects
 (SQL Server, Oracle) are intentionally out of scope.
 
-**Status: stage 3 of 7 — structure and diagram.** Connect, write SQL in tabs, run a statement or a
-whole script, browse the result in a sortable, filterable grid — and see the database as an ER diagram:
-tables with key icons, foreign keys as crow's-foot lines, drag to arrange, double-click a table to read its
-rows. Autocomplete and editing results are the next stages (see [Roadmap](#roadmap)).
+**Status: stage 4 of 7 — autocomplete.** Connect, write SQL in tabs, run a statement or a whole script,
+browse the result in a sortable, filterable grid, see the database as an ER diagram — and now the editor
+completes what you type: keywords, tables, columns of the tables in `FROM`, aliases, ready `JOIN … ON`
+conditions made from foreign keys, dialect functions and types, snippets such as `sel` → `SELECT * FROM`.
+Editing results is the next stage (see [Roadmap](#roadmap)).
+
+| Tables after `FROM` | Columns of an alias | Join condition from the foreign key |
+|---|---|---|
+| ![](docs/screenshots/stage4-tables.png) | ![](docs/screenshots/stage4-columns.png) | ![](docs/screenshots/stage4-join.png) |
+
+More: [snippets and keywords](docs/screenshots/stage4-snippets.png),
+[expand `*`](docs/screenshots/stage4-star.png),
+[light theme, Russian UI](docs/screenshots/stage4-light-ru.png).
 
 | The diagram | Select a table | Table data |
 |---|---|---|
@@ -43,6 +52,51 @@ import simd; print(simd.status())"` shows what is active.
 Config lives in the per-user config directory (`connections.json`, `settings.toml`, `vault.json`)
 and data in the per-user data directory (`app.db`). Set `EASYDBMS_HOME=/some/dir` to keep
 everything in one place (portable installs, experiments).
+
+## What stage 4 does
+
+- **Where am I?** Every suggestion starts from an analysis of the statement around the cursor
+  (`core/autocomplete/context.py`): which clause the cursor is in, which tables (and aliases, CTEs,
+  derived tables, `JOIN … USING`) are visible from there, whether a name is being qualified
+  (`o.`, `public.orders.`), whether a quote is open, whether the cursor is in a string or comment (nothing
+  is offered there). It reads the *tokens* of the dialect's own lexer, so it works on text that does not
+  parse yet — `SELECT count(| FROM orders` still knows about `orders` — and asks `sqlglot` only for the
+  output columns of finished subqueries and CTEs (with a token fallback, `*` expanded from the schema).
+- **What is offered where.**
+  statement start → snippets, then statement keywords (per dialect: `COPY` only in PostgreSQL, `PRAGMA`
+  only in SQLite, …) · after `FROM` / `JOIN` / `UPDATE` / `INSERT INTO` → tables, views, CTEs, schemas
+  (tables related by a foreign key to the ones already in the query come first after `JOIN`) ·
+  `SELECT` / `WHERE` / `GROUP BY` / `ORDER BY` / `ON` → columns of the query's tables (qualified with the
+  alias when the name is ambiguous), then aliases, outer-query columns in a subquery, functions and
+  keywords · `alias.` / `table.` / `schema.` → its columns / tables · after `JOIN t ON` → the ready
+  condition from the foreign key (`o.customer_id = c.id`, composite keys and self joins included) ·
+  `ORDER BY` → also the select-list aliases · `INSERT (…` / `SET` / `ALTER … DROP COLUMN` → the columns
+  of the target not yet listed · `::` / `CAST(… AS` / column definitions → types · after a complete
+  clause → the keywords that may follow (`GROUP` → `BY`, `LEFT` → `JOIN`).
+  `Ctrl+Space` on a `*` offers to **expand it into the column list**.
+- **Order.** The context decides first (columns of `FROM` before functions before keywords), then how
+  well the typed text matches (exact, prefix, word start, three or more letters inside, letters in order
+  for abbreviations such as `ordit` → `order_items`, and a typo-tolerant `rapidfuzz` match: `custmer` →
+  `customers`), then how often you accepted the suggestion on this connection (`app.db`, migration 4),
+  then alphabetically.
+- **The popup.** Kind badge (table, view, column, alias, keyword, function, type, snippet, join, CTE),
+  the column's type or the table's size on the right, and a details pane (table comment and columns,
+  column flags and foreign key, function signature). `Tab` / `Enter` accept, `Esc` closes, `↑` `↓`
+  `PgUp` `PgDn` move, double-click accepts, `Ctrl+Space` (or *Query → Autocomplete*) forces it. It opens
+  150 ms after you stop typing, after `.` and after a space following `FROM`, `JOIN`, `INTO`, `UPDATE`
+  or `ON`; the analysis runs in a worker thread and an answer for text that has since changed is
+  discarded. The popup never takes the keyboard focus, so typing goes on while it is open.
+- **Snippets** (`core/autocomplete/snippets.py`): `sel`, `selc`, `seld`, `ins`, `upd`, `del`, `cte` at
+  the start of a statement, `ij` `lj` `rj` `cj` after a table in `FROM` / `JOIN`, `ob` `gb` `lim` after a
+  clause. The cursor lands where you type next (`INNER JOIN | ON `).
+- **Keyword case** — *Query → Keyword case*: UPPER (default), lower, or as typed (follows the case of
+  the letters already typed). It affects keywords, functions, types and snippets, never identifiers.
+- Names are quoted only when the dialect needs it (`"Order Lines"`, `` `select` ``); inside an open quote
+  only identifiers are offered and the closing quote is kept.
+
+Not in this stage: the inside of `$$ … $$` bodies (the editor sees one string there, so nothing is
+offered) and JSON keys after `->`. The ClickBench / schema benchmarks were deliberately not rerun for
+stage 4.
 
 ## What stage 3 does
 
@@ -246,12 +300,13 @@ easydbms/
 │  ├─ erd/                  # relations, cardinality, layered layout, edge routing, saved positions
 │  ├─ browse/               # SQL for paging, sorting and filtering a table
 │  ├─ queries/              # query tabs, danger guard, script job
+│  ├─ autocomplete/         # cursor context, candidates + ranking, snippets, usage counts
 │  ├─ simd/                 # optional C extension: AVX2/SSE2 scanner + statement splitter
 │  ├─ columnar.py           # Arrow/NumPy sort and filter of a result set
 │  ├─ storage/              # app.db (migrations) and settings.toml
 │  ├─ paths.py  services.py
-├─ ui/                      # PySide6: main window, workspace, editor, results + table tabs,
-│                           #   erd/ (cards, lines, view, pane), quick open, dialogs, theme, i18n
+├─ ui/                      # PySide6: main window, workspace, editor (+ completion popup), results +
+│                           #   table tabs, erd/ (cards, lines, view, pane), quick open, dialogs, theme, i18n
 └─ app.py
 benchmarks/                 # ClickBench harness and micro-benchmarks
 ```
@@ -278,6 +333,11 @@ Dependencies point one way: `ui → core/session → core/*`. Worker threads rea
 - **MySQL/MariaDB: join in Python, not in the server.** Joining `KEY_COLUMN_USAGE` to
   `REFERENTIAL_CONSTRAINTS` inside `information_schema` took 590 ms for 1 000 tables where the two queries
   alone take 15 ms each, so the join is done on the client.
+- **Autocomplete never blocks typing.** The analysis (`Completer.complete`) is a pure function of
+  `(text, offset, dialect, schema)`; the editor runs it on one worker thread per connection and drops the
+  answer if the text or the cursor moved. Sentences the core writes itself ("4 cols", "foreign key …") go
+  through `autocomplete.messages.t()`, which the UI points at its Russian catalog, so the core still
+  knows no UI toolkit and no language.
 - **A missing SQLite file is an error**, not a new empty database (opt in with "Create the file").
 - A damaged `connections.json` / `settings.toml` is never overwritten: it is moved aside as
   `*.broken-<timestamp>`, valid entries are kept, and the user is told.
@@ -329,7 +389,7 @@ libdbus-1-3` installed.
 2. ✅ **SQL editor** (tabs, highlighting from the dialect lexer), run/cancel, read-only results grid,
    optional native SIMD scanner, ClickBench harness.
 3. ✅ **Schema introspection, ERD pane, table tabs**, `Ctrl+P` go to table, schema benchmarks.
-4. Autocomplete (keywords → tables → columns → aliases → JOIN by FK).
+4. ✅ **Autocomplete** (keywords → tables → columns → aliases → JOIN by FK), snippets, usage ranking.
 5. Editable grid: change set, preview, Alt+S, one transaction, optimistic locking.
 6. SSL, SSH tunnel, `~/.pgpass` / `pg_service.conf`.
 7. Cloud providers, history and saved queries, ERD export, packaging.

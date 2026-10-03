@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QMessageBox
 from pytestqt.qtbot import QtBot
 
@@ -10,7 +11,7 @@ from easydbms.core.dialects import MYSQL, SQLITE, DialectId
 from easydbms.core.queries import TabState
 from easydbms.ui.workspace import QueryWorkspace
 
-from .conftest import Env, Prompts
+from .conftest import Env, Prompts, add_shop
 
 SLOW = "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c) SELECT count(*) FROM c"
 
@@ -487,3 +488,100 @@ def test_closing_a_query_tab_stops_its_table_tabs(env: Env, qtbot: QtBot) -> Non
     assert table_tab is not None
     workspace.close_current_tab()
     assert not table_tab.alive
+
+
+# ---------------------------------------------------------------------------- autocomplete
+
+
+def make_completing(env: Env, qtbot: QtBot, keyword_case: str = "upper") -> QueryWorkspace:
+    config = add_shop(env, "Shop")
+    session = env.services.manager.activate(config.id).result(timeout=5)
+    qtbot.waitUntil(lambda: session.schema is not None, timeout=10000)
+    workspace = QueryWorkspace(
+        config,
+        env.services.tab_store,
+        lambda: 1000,
+        usage=env.services.usage_store,
+        keyword_case=lambda: keyword_case,
+    )
+    qtbot.addWidget(workspace)
+    workspace.set_session(session)
+    workspace.resize(800, 600)
+    workspace.show()
+    return workspace
+
+
+def test_every_tab_completes_with_the_schema_of_the_session(env: Env, qtbot: QtBot) -> None:
+    workspace = make_completing(env, qtbot)
+    second = workspace.new_tab()
+    for tab in (workspace.current_tab(), second):
+        assert tab is not None
+        assert tab.editor.completion.enabled
+    second.editor.completion.debounce_ms = 5
+    QTest.keyClicks(second.editor, "SELECT * FROM aut")
+    qtbot.waitUntil(lambda: second.editor.completion.visible, timeout=5000)
+    model = second.editor.completion.popup.model
+    assert model.item(0) is not None
+    assert model.item(0).label == "author"  # type: ignore[union-attr]
+
+
+def test_the_complete_action_opens_the_list(env: Env, qtbot: QtBot) -> None:
+    workspace = make_completing(env, qtbot)
+    tab = workspace.current_tab()
+    assert tab is not None
+    workspace.complete()
+    qtbot.waitUntil(lambda: tab.editor.completion.visible, timeout=5000)
+
+
+def test_accepted_suggestions_are_counted_for_this_connection(env: Env, qtbot: QtBot) -> None:
+    workspace = make_completing(env, qtbot)
+    tab = workspace.current_tab()
+    assert tab is not None
+    tab.editor.completion.debounce_ms = 5
+    QTest.keyClicks(tab.editor, "SELECT * FROM boo")
+    qtbot.waitUntil(lambda: tab.editor.completion.visible, timeout=5000)
+    QTest.keyClick(tab.editor, Qt.Key.Key_Tab)
+    key = "table:main.book"
+    qtbot.waitUntil(
+        lambda: env.services.usage_store.counts(workspace.config.id).get(key) == 1, timeout=5000
+    )
+
+
+def test_the_keyword_case_is_read_when_asking(env: Env, qtbot: QtBot) -> None:
+    case = {"value": "lower"}
+    config = add_shop(env, "Shop")
+    session = env.services.manager.activate(config.id).result(timeout=5)
+    workspace = QueryWorkspace(
+        config, env.services.tab_store, lambda: 1000, keyword_case=lambda: case["value"]
+    )
+    qtbot.addWidget(workspace)
+    workspace.set_session(session)
+    workspace.show()
+    tab = workspace.current_tab()
+    assert tab is not None
+    tab.editor.completion.debounce_ms = 5
+    QTest.keyClicks(tab.editor, "SEL")
+    qtbot.waitUntil(lambda: tab.editor.completion.visible, timeout=5000)
+    labels = [i.label for i in iter_items(tab)]
+    assert "select" in labels
+    tab.editor.completion.hide()
+    case["value"] = "upper"
+    tab.editor.setPlainText("")
+    QTest.keyClicks(tab.editor, "SEL")
+    qtbot.waitUntil(lambda: "SELECT" in [i.label for i in iter_items(tab)], timeout=5000)
+
+
+def iter_items(tab: object) -> list:  # type: ignore[type-arg]
+    model = tab.editor.completion.popup.model  # type: ignore[attr-defined]
+    return [m for row in range(model.rowCount()) if (m := model.item(row))]
+
+
+def test_closing_the_workspace_stops_the_completion_worker(env: Env, qtbot: QtBot) -> None:
+    workspace = make_completing(env, qtbot)
+    workspace.shutdown()
+    tab = workspace.current_tab()
+    assert tab is not None
+    tab.editor.completion.debounce_ms = 5
+    QTest.keyClicks(tab.editor, "sel")  # no worker any more: must not raise or hang
+    qtbot.wait(60)
+    assert not tab.editor.completion.visible

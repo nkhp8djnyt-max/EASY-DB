@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from concurrent.futures import Future
+from concurrent.futures import Future, ThreadPoolExecutor
 from functools import partial
 
 from PySide6.QtCore import Qt, QTimer, Signal
@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..core.autocomplete import Completer, KeywordCase, UsageStore
 from ..core.connections import FileConnection, ServerConnection
 from ..core.db import NotConnectedError, QueryResult
 from ..core.dialects import (
@@ -44,10 +45,10 @@ from ..core.queries import (
     is_write,
 )
 from ..core.queries.danger import DangerKind
-from ..core.schema import Table
+from ..core.schema import DatabaseSchema, Table
 from ..core.session import Session
 from .connection_form import DIALECT_LABELS
-from .editor import SqlEditor
+from .editor import CompletionSource, SqlEditor
 from .i18n import tr
 from .results import ResultsPanel, TableTab
 
@@ -91,12 +92,26 @@ class QueryWorkspace(QWidget):
         tab_store: QueryTabStore,
         row_limit: Callable[[], int],
         parent: QWidget | None = None,
+        *,
+        usage: UsageStore | None = None,
+        keyword_case: Callable[[], str] | None = None,
     ) -> None:
         super().__init__(parent)
         self._config = config
         self._tab_store = tab_store
         self._row_limit = row_limit
+        self._usage = usage
+        self._keyword_case = keyword_case or (lambda: KeywordCase.UPPER.value)
         self._session: Session | None = None
+        self._completion_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="complete")
+        self._completion = CompletionSource(
+            completer=Completer(),
+            executor=self._completion_pool,
+            schema=self._schema,
+            keyword_case=lambda: KeywordCase(self._keyword_case()),
+            counts=lambda: usage.counts(config.id) if usage is not None else {},
+            record=lambda key: usage.record(config.id, key) if usage is not None else None,
+        )
         self._save_timer = QTimer(self)
         self._save_timer.setSingleShot(True)
         self._save_timer.timeout.connect(self.flush)
@@ -177,6 +192,16 @@ class QueryWorkspace(QWidget):
     def config(self) -> ServerConnection | FileConnection:
         return self._config
 
+    def _schema(self) -> DatabaseSchema | None:
+        session = self._session
+        return session.schema if session is not None else None
+
+    def complete(self) -> None:
+        """Open the suggestions in the current editor (Ctrl+Space)."""
+        tab = self.current_tab()
+        if tab is not None:
+            tab.editor.complete()
+
     @property
     def dialect(self) -> Dialect:
         return self._config.dialect_impl
@@ -197,6 +222,7 @@ class QueryWorkspace(QWidget):
     ) -> QueryTab:
         tab = QueryTab(title or tr("Query {n}", n=self._next_number()), dialect or self.dialect)
         tab.editor.setPlainText(sql)
+        tab.editor.set_completion(self._completion)
         tab.editor.document().modificationChanged.connect(lambda *_: self._schedule_save())
         tab.editor.textChanged.connect(self._schedule_save)
         tab.results.errorLocated.connect(
@@ -333,6 +359,7 @@ class QueryWorkspace(QWidget):
             if tab.run is not None:
                 tab.run.cancel()
         self._clock.stop()
+        self._completion_pool.shutdown(wait=False, cancel_futures=True)
         self.flush()
 
     def refresh_theme(self) -> None:

@@ -20,6 +20,8 @@ class AppSettings(BaseModel):
     language: Literal["auto", "ru", "en"] = "auto"
     #: Most rows a query result keeps; the rest is cut off (and reported) to protect memory.
     row_limit: int = Field(default=1000, ge=1, le=10_000_000)
+    #: Case of keywords inserted by autocomplete; ``preserve`` follows what was typed.
+    keyword_case: Literal["upper", "lower", "preserve"] = "upper"
 
 
 class SettingsStore:

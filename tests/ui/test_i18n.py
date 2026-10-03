@@ -7,6 +7,8 @@ from pathlib import Path
 import pytest
 
 import easydbms.ui as ui_package
+from easydbms.core import autocomplete
+from easydbms.core.autocomplete.snippets import SNIPPETS
 from easydbms.ui.catalog_ru import RU
 from easydbms.ui.i18n import current_language, resolve_language, set_language, tr
 
@@ -15,17 +17,20 @@ PLACEHOLDER = re.compile(r"\{(\w+)\}")
 
 
 def source_strings() -> dict[str, str]:
-    """Every literal passed to ``tr()`` in the UI package, with the file that uses it."""
+    """Every literal passed to ``tr()`` in the UI package (and ``t()`` in autocomplete's core)."""
     found: dict[str, str] = {}
-    for path in sorted(UI_DIR.rglob("*.py")):
-        if path.name == "catalog_ru.py":
-            continue
+    files = [(p, "tr") for p in sorted(UI_DIR.rglob("*.py")) if p.name != "catalog_ru.py"]
+    files += [(p, "t") for p in sorted(Path(autocomplete.__file__).parent.rglob("*.py"))]
+    for path, function in files:
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if (
                 isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Name)
-                and node.func.id == "tr"
+                and node.func.id == function
                 and node.args
+                and not (
+                    isinstance(node.args[0], ast.Attribute) and node.args[0].attr == "description"
+                )
             ):
                 first = node.args[0]
                 assert isinstance(first, ast.Constant), (
@@ -33,6 +38,9 @@ def source_strings() -> dict[str, str]:
                     "checked against the Russian catalog"
                 )
                 found[str(first.value)] = path.name
+    for snippet in SNIPPETS:  # their descriptions reach the user through t() in the provider
+        assert snippet.description, f"snippet {snippet.trigger!r} has no description"
+        found[snippet.description] = "snippets.py"
     return found
 
 

@@ -19,10 +19,20 @@ def test_save_and_load_round_trip(tmp_path: Path) -> None:
     path = tmp_path / "config" / "settings.toml"
     store = SettingsStore(path)
     store.save(AppSettings(theme="light", language="ru"))
-    assert path.read_text() == 'theme = "light"\nlanguage = "ru"\nrow_limit = 1000\n'
+    assert path.read_text() == (
+        'theme = "light"\nlanguage = "ru"\nrow_limit = 1000\nkeyword_case = "upper"\n'
+    )
     loaded = SettingsStore(path).load()
     assert (loaded.theme, loaded.language) == ("light", "ru")
     assert [p.name for p in path.parent.iterdir()] == ["settings.toml"]
+
+
+def test_keyword_case_round_trip_and_validation(tmp_path: Path) -> None:
+    path = tmp_path / "settings.toml"
+    SettingsStore(path).save(AppSettings(keyword_case="preserve"))
+    assert SettingsStore(path).load().keyword_case == "preserve"
+    with pytest.raises(ValueError, match="keyword_case"):
+        AppSettings(keyword_case="Title")  # type: ignore[arg-type]
 
 
 def test_unknown_keys_are_ignored_for_forward_compatibility(tmp_path: Path) -> None:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
+from .autocomplete import UsageStore
 from .connections import ConnectionStore, SecretStore, choose_secret_store
 from .erd import ErdLayoutStore
 from .paths import AppPaths
@@ -24,6 +25,7 @@ class Services:
     manager: ConnectionManager
     tab_store: QueryTabStore
     erd_store: ErdLayoutStore
+    usage_store: UsageStore
 
     def close(self) -> None:
         self.manager.close_all()
@@ -55,4 +57,5 @@ def build_services(
         ),
         tab_store=QueryTabStore(db),
         erd_store=ErdLayoutStore(db),
+        usage_store=UsageStore(db),
     )
