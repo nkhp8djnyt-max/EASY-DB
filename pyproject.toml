@@ -10,24 +10,31 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "sqlglot>=30,<31",
+    "pydantic>=2.7",
+    "platformdirs>=4",
+    "keyring>=25",
+    "cryptography>=43",
+    "tomli-w>=1.0",
+    "psycopg[binary]>=3.2",
+    "PyMySQL>=1.1",
 ]
 
 [project.optional-dependencies]
-# Database drivers for the three supported dialects (SQLite ships with Python).
-drivers = [
-    "SQLAlchemy>=2.0",
-    "psycopg[binary]>=3.2",
-    "PyMySQL>=1.1",
+gui = [
+    "PySide6>=6.7",
 ]
 dev = [
+    "PySide6>=6.7",
     "SQLAlchemy>=2.0",
-    "psycopg[binary]>=3.2",
-    "PyMySQL>=1.1",
     "pytest>=8",
+    "pytest-qt>=4.4",
     "ruff>=0.6",
     "mypy>=1.11",
     "types-PyMySQL",
 ]
+
+[project.gui-scripts]
+sql-erd-studio = "sql_erd_studio.app:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["sql_erd_studio"]
@@ -35,6 +42,7 @@ packages = ["sql_erd_studio"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
+qt_api = "pyside6"
 markers = [
     "integration: needs a live database; PostgreSQL/MySQL are enabled via ERD_TEST_POSTGRES_URL / ERD_TEST_MYSQL_URL",
 ]
@@ -48,7 +56,16 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "RUF", "PT"]
 # Keyword tables are written as wrapped words + .split() on purpose.
 ignore = ["SIM905"]
 
+[tool.ruff.lint.per-file-ignores]
+"sql_erd_studio/ui/theme/stylesheet.py" = ["E501"]  # CSS lines
+"sql_erd_studio/ui/catalog_ru.py" = ["E501", "RUF001", "RUF003"]  # translations: long, Cyrillic
+
 [tool.mypy]
 python_version = "3.12"
 strict = true
 files = ["sql_erd_studio", "tests"]
+
+[[tool.mypy.overrides]]
+# keyring ships untyped base classes; the fake backend in the tests has to subclass them.
+module = "tests.core.connections.test_secrets"
+disallow_untyped_calls = false
